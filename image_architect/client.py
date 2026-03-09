@@ -6,11 +6,10 @@ Calls the Image Architect A2A server directly via HTTP from main.py.
 This decouples image generation from Mix's bidi-stream.
 
 Public functions:
-- generate_canvas_action_image() — image from color/shape selection + user response
-- generate_single_image()        — 1 image from canvas observation on demand
+- generate_gesture_image()  — image from color + shape + gesture + voice (primary path)
+- generate_single_image()   — 1 image from canvas observation on demand (fallback)
 """
 
-import asyncio
 import json
 import logging
 import os
@@ -50,6 +49,14 @@ SHAPE_PROMPT_MAP = {
     "cloud":    "cumulus clouds from below, soft mass and open light, drifting freely",
 }
 
+# ── Gesture intensity → motion quality ────────────────────────────────────────
+
+GESTURE_QUALITY_MAP = {
+    "gentle": "soft and delicate, subtle presence, quiet movement, still",
+    "medium": "flowing and dynamic, purposeful motion, in movement",
+    "strong": "bold and energetic, expansive gesture, full presence",
+}
+
 # ── Mood tone keywords → Imagen prompt enrichment ────────────────────────────
 
 MOOD_PROMPT_MAP = {
@@ -74,6 +81,10 @@ MOOD_PROMPT_MAP = {
     "reaching":   "branches reaching toward light, upward movement, hopeful",
     "still":      "mirror lake at dawn, perfect stillness, suspended breath",
     "present":    "single candle flame, steady and warm, here and now",
+    "water":      "deep ocean surface, layered blues, cool depths, painterly wash",
+    "fire":       "ember glow at dusk, deep reds and oranges, heat and light",
+    "earth":      "warm earth and clay, roots pressing into soil, grounded and ancient",
+    "air":        "morning mist over open field, soft whites and greys, drifting",
 }
 
 DEFAULT_PROMPTS = [
@@ -124,61 +135,63 @@ async def _call_architect(prompt: str, mood_tone: str, request_id: str) -> str |
             return None
 
 
-# ── Public: canvas action image ───────────────────────────────────────────────
+# ── Public: gesture image (primary generation path) ───────────────────────────
 
-async def generate_canvas_action_image(
-    action_type: str,
-    action_value: str,
-    user_response: str,
+async def generate_gesture_image(
+    color: str,
+    shape: str,
+    gesture_intensity: str,
+    voice_transcript: str,
     on_image_ready,
 ):
     """
-    Generate an image from a canvas color or shape selection, enriched by
-    the user's verbal response to Mix's question.
+    Generate an image from the full three-step creative ritual:
+    color + shape + gesture + voice.
 
-    action_type:   "color" or "shape"
-    action_value:  e.g. "blue", "circle"
-    user_response: what the user said after Mix asked about their choice
-    on_image_ready: async callback(base64_str)
+    color:             e.g. "blue"
+    shape:             e.g. "circle"
+    gesture_intensity: "gentle", "medium", or "strong"
+    voice_transcript:  what the user said during the gesture window
+    on_image_ready:    async callback(base64_str)
     """
-    # Get base visual prompt
-    if action_type == "color":
-        base = COLOR_PROMPT_MAP.get(action_value.lower(), DEFAULT_PROMPTS[0])
-    elif action_type == "shape":
-        base = SHAPE_PROMPT_MAP.get(action_value.lower(), DEFAULT_PROMPTS[0])
-    else:
-        base = DEFAULT_PROMPTS[0]
+    # Base visual prompts from color and shape
+    color_base = COLOR_PROMPT_MAP.get(color.lower(), DEFAULT_PROMPTS[0]) if color else DEFAULT_PROMPTS[0]
+    shape_base = SHAPE_PROMPT_MAP.get(shape.lower(), "") if shape else ""
+    gesture_quality = GESTURE_QUALITY_MAP.get(gesture_intensity, "expressive, present")
 
-    # Detect mood tone from user's verbal response
+    # Detect mood from voice transcript
     mood_tone = "reflective"
-    user_lower = user_response.lower() if user_response else ""
+    voice_lower = voice_transcript.lower() if voice_transcript else ""
     for keyword in MOOD_PROMPT_MAP:
-        if keyword in user_lower:
+        if keyword in voice_lower:
             mood_tone = keyword
             break
 
-    # Combine base visual + user's emotional context
-    if user_response and len(user_response.strip()) > 5:
-        prompt = f"{base}, {user_response.strip()[:100]}"
-    else:
-        prompt = base
+    # Build combined prompt from all four inputs
+    parts = [p for p in [color_base, shape_base, gesture_quality] if p]
+    if voice_transcript and len(voice_transcript.strip()) > 5:
+        parts.append(voice_transcript.strip()[:120])
+    prompt = ", ".join(parts)
 
-    logger.info(f"Canvas action image — {action_type}={action_value}, mood={mood_tone}")
-    logger.info(f"Prompt: {prompt[:100]}…")
+    logger.info(
+        f"Gesture image — color={color}, shape={shape}, "
+        f"motion={gesture_intensity}, mood={mood_tone}"
+    )
+    logger.info(f"Prompt: {prompt[:120]}…")
 
     img_b64 = await _call_architect(
         prompt=prompt,
         mood_tone=mood_tone,
-        request_id=f"canvas-{action_type}-{action_value}-{abs(hash(user_response))}",
+        request_id=f"gesture-{color}-{shape}-{abs(hash(voice_transcript + gesture_intensity))}",
     )
     if img_b64:
         await on_image_ready(img_b64)
-        logger.info("Canvas action image forwarded to browser.")
+        logger.info("Gesture image forwarded to browser.")
     else:
-        logger.warning("Canvas action image: no image data returned.")
+        logger.warning("Gesture image: no image data returned.")
 
 
-# ── Public: single on-demand image ───────────────────────────────────────────
+# ── Public: single on-demand image (fallback / canvas observation) ────────────
 
 async def generate_single_image(
     prompt: str,
@@ -186,7 +199,8 @@ async def generate_single_image(
     on_image_ready,
 ):
     """
-    Generate a single image — used for canvas observation offers.
+    Generate a single image from a freeform prompt.
+    Used for canvas observation offers or any ad-hoc generation.
     Calls on_image_ready(base64_str) when complete.
     """
     logger.info(f"Generating single image: {prompt[:60]}…")
@@ -207,6 +221,7 @@ async def generate_single_image(
 def _extract_image_from_a2a_response(response: dict) -> str | None:
     """
     Extract base64 image data from an A2A JSON-RPC response.
+    Tries multiple paths in order of likelihood.
     """
     try:
         result = response.get("result", {})

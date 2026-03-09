@@ -7,861 +7,297 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/htm@3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:           #f5f0e8;
-      --surface:      #ede8df;
-      --surface2:     #e4ddd3;
-      --border:       #d4c9b5;
-      --border-light: #e8e0d4;
-      --earth:        #7c5cbf;
-      --earth-dim:    #5a3f9a;
-      --earth-light:  #a08dd4;
-      --sage:         #6b7c5a;
-      --clay:         #b07d5a;
-      --clay-light:   #d4a47a;
-      --text:         #3d3530;
-      --text-dim:     #7a6a5a;
-      --text-muted:   #a89880;
-      --voice:        #6b4f3a;
-      --radius:       12px;
-      --transition:   0.2s ease;
+      --bg: #f5f0e8;
+      --surface: #ede8df;
+      --surface2: #e4ddd3;
+      --border: #d4c9b5;
+      --earth: #7c5cbf;
+      --earth-dim: #5a3f9a;
+      --earth-light: #a08dd4;
+      --sage: #6b7c5a;
+      --clay: #b07d5a;
+      --text: #3d3530;
+      --text-dim: #7a6a5a;
+      --text-muted: #a89880;
+      --voice: #6b4f3a;
+      --tr: 0.2s ease;
     }
 
-    html, body {
-      height: 100%;
-      font-family: 'DM Mono', monospace;
-      background: var(--bg);
-      color: var(--text);
-      overflow: hidden;
-    }
+    html, body { height: 100%; font-family: 'DM Mono', monospace; background: var(--bg); color: var(--text); overflow: hidden; }
 
-    #app {
+    /* Layout */
+    .app-grid {
       display: grid;
-      grid-template-columns: 260px 1fr 210px;
-      grid-template-rows: 52px 1fr 100px;
-      grid-template-areas:
-        "header  header  header"
-        "sidebar canvas  orb-panel"
-        "footer  footer  footer";
+      grid-template-columns: 250px 1fr 200px;
+      grid-template-rows: 48px 1fr 80px;
+      grid-template-areas: "hd hd hd" "sb cv op" "ft ft ft";
       height: 100vh;
     }
 
-    /* ── Header ──────────────────────────────────────────────────────── */
-    #header {
-      grid-area: header;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      border-bottom: 1px solid var(--border);
-      background: var(--surface);
-      z-index: 10;
-    }
-    .logo {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 1.4rem;
-      font-weight: 300;
-      letter-spacing: 0.12em;
-      color: var(--text);
-    }
-    .logo span { color: var(--earth); }
-
-    #status-bar {
-      font-size: 0.68rem;
-      color: var(--text-muted);
-      letter-spacing: 0.08em;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .status-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--border);
-      transition: background var(--transition), box-shadow var(--transition);
-    }
-    .status-dot.live     { background: var(--sage); box-shadow: 0 0 8px rgba(107,124,90,0.5); }
+    /* Header */
+    .hd { grid-area: hd; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--surface); z-index: 10; }
+    .logo { font-family: 'Cormorant Garamond', serif; font-size: 1.3rem; font-weight: 300; letter-spacing: 0.12em; }
+    .logo-accent { color: var(--earth); }
+    .status-bar { font-size: 0.65rem; color: var(--text-muted); letter-spacing: 0.08em; display: flex; align-items: center; gap: 7px; }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: all var(--tr); }
+    .status-dot.live { background: var(--sage); box-shadow: 0 0 8px rgba(107,124,90,0.5); }
     .status-dot.speaking { background: var(--clay); box-shadow: 0 0 8px rgba(176,125,90,0.6); animation: blink 0.6s ease-in-out infinite alternate; }
-    @keyframes blink { from { opacity: 0.5; } to { opacity: 1; } }
+    @keyframes blink { from { opacity: 0.5 } to { opacity: 1 } }
 
-    /* ── Sidebar (left) ──────────────────────────────────────────────── */
-    #sidebar {
-      grid-area: sidebar;
-      border-right: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .section-header {
-      padding: 12px 16px 8px;
-      font-size: 0.6rem;
+    /* Sidebar */
+    .sb { grid-area: sb; border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; overflow: hidden; }
+    .section-hd {
+      padding: 10px 14px 6px;
+      font-size: 0.58rem;
       letter-spacing: 0.14em;
       color: var(--text-muted);
       text-transform: uppercase;
       flex-shrink: 0;
+      transition: color var(--tr);
     }
+    .section-hd.active { color: var(--earth); }
+    .section-div { height: 1px; background: var(--border); margin: 2px 0; flex-shrink: 0; }
 
-    .section-divider {
-      height: 1px;
-      background: var(--border);
-      margin: 2px 0;
-      flex-shrink: 0;
-    }
-
-    /* Color picker */
-    #color-grid {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      padding: 6px 14px 12px;
-      flex-shrink: 0;
-    }
+    /* Colors */
+    .color-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 4px 14px 10px; flex-shrink: 0; }
     .color-swatch {
-      aspect-ratio: 1;
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid transparent;
+      aspect-ratio: 1; border-radius: 50%; cursor: pointer;
+      border: 2.5px solid transparent;
       box-shadow: 0 1px 4px rgba(61,53,48,0.18);
-      transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition);
-      position: relative;
+      transition: transform var(--tr), border-color var(--tr), box-shadow var(--tr), opacity var(--tr);
     }
-    .color-swatch:hover {
-      transform: scale(1.14);
-      box-shadow: 0 3px 10px rgba(61,53,48,0.25);
-    }
-    .color-swatch.selected {
-      border-color: var(--earth);
-      transform: scale(1.1);
-      box-shadow: 0 0 14px rgba(124,92,191,0.4);
-    }
-    .color-swatch[data-name="white"] { border-color: var(--border); }
-    .color-swatch[data-name="white"]:hover { border-color: var(--earth-light); }
+    .color-swatch:hover { transform: scale(1.15); box-shadow: 0 3px 10px rgba(61,53,48,0.25); }
+    .color-swatch.sel { border-color: var(--earth); transform: scale(1.1); box-shadow: 0 0 14px rgba(124,92,191,0.45); }
+    .color-swatch.white-ring { border-color: var(--border); }
+    .color-swatch.dimmed { opacity: 0.35; pointer-events: none; }
 
-    /* Shape picker */
-    #shape-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 6px 14px 12px;
-      flex-shrink: 0;
-    }
+    /* Shapes */
+    .shape-grid { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 14px 10px; flex-shrink: 0; }
     .shape-btn {
-      width: 36px;
-      height: 36px;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: var(--surface2);
-      cursor: pointer;
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all var(--transition);
-      user-select: none;
-      color: var(--text-dim);
+      width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface2); cursor: pointer; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--tr); color: var(--text-dim); user-select: none;
     }
-    .shape-btn:hover {
-      border-color: var(--earth-light);
-      background: var(--surface);
-      transform: scale(1.05);
-      color: var(--earth);
-    }
-    .shape-btn.selected {
-      border-color: var(--earth);
-      background: rgba(124, 92, 191, 0.08);
-      box-shadow: 0 0 10px rgba(124, 92, 191, 0.22);
-      color: var(--earth);
-    }
+    .shape-btn:hover { border-color: var(--earth-light); transform: scale(1.06); color: var(--earth); }
+    .shape-btn.sel { border-color: var(--earth); background: rgba(124,92,191,0.08); color: var(--earth); box-shadow: 0 0 10px rgba(124,92,191,0.22); }
+    .shape-btn.dimmed { opacity: 0.3; pointer-events: none; }
+    .shape-btn.ready { border-color: var(--earth-light); background: rgba(124,92,191,0.05); }
 
-    /* Generated palette */
-    #palette-scroll {
-      flex: 1;
-      overflow-y: auto;
-      padding: 6px 12px 12px;
-    }
-    #palette-scroll::-webkit-scrollbar { width: 3px; }
-    #palette-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    #palette-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    #palette-empty {
-      padding: 20px 4px;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.78rem;
-      line-height: 1.9;
-      font-family: 'Cormorant Garamond', serif;
+    /* Step indicator */
+    .step-hint {
+      padding: 4px 14px 8px;
+      font-size: 0.56rem;
+      color: var(--earth);
+      letter-spacing: 0.1em;
       font-style: italic;
-    }
-    #palette-loading { display: none; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-    #palette-loading.visible { display: flex; }
-    .skeleton {
-      height: 80px;
-      border-radius: 8px;
-      background: linear-gradient(90deg, var(--surface2) 0%, var(--border) 50%, var(--surface2) 100%);
-      background-size: 200% 100%;
-      animation: shimmer 1.8s infinite;
-    }
-    @keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-
-    .palette-item {
-      border-radius: 8px;
-      border: 1px solid var(--border);
-      overflow: hidden;
-      cursor: grab;
-      position: relative;
-      background: var(--surface2);
-      transition: border-color var(--transition), transform var(--transition), box-shadow var(--transition);
-    }
-    .palette-item:hover {
-      border-color: var(--earth);
-      transform: scale(1.02);
-      box-shadow: 0 4px 16px rgba(124,92,191,0.15);
-    }
-    .palette-item img { width: 100%; height: auto; display: block; }
-    .palette-item .drag-hint {
-      position: absolute;
-      inset: 0;
-      background: rgba(124, 92, 191, 0.32);
-      display: flex;
-      align-items: center;
-      justify-content: center;
       opacity: 0;
-      transition: opacity var(--transition);
-      font-size: 0.6rem;
-      color: white;
-      letter-spacing: 0.08em;
-    }
-    .palette-item:hover .drag-hint { opacity: 1; }
-
-    /* ── Canvas ──────────────────────────────────────────────────────── */
-    #canvas-area {
-      grid-area: canvas;
-      position: relative;
-      background: var(--bg);
-      overflow: hidden;
-    }
-    #motion-canvas {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-    }
-    #canvas-container {
-      position: relative;
-      width: 100%;
-      height: 100%;
-    }
-    #fabricCanvas {
-      display: block;
-      position: relative;
-      z-index: 1;
-    }
-    #canvas-toolbar {
-      position: absolute;
-      top: 14px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 6px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 5px 10px;
-      z-index: 5;
-      opacity: 0;
-      transition: opacity var(--transition);
-      box-shadow: 0 2px 10px rgba(61,53,48,0.08);
-    }
-    #canvas-area:hover #canvas-toolbar { opacity: 1; }
-    .tool-btn {
-      background: none;
-      border: none;
-      color: var(--text-muted);
-      font-size: 0.62rem;
-      letter-spacing: 0.08em;
-      padding: 3px 9px;
-      border-radius: 14px;
-      cursor: pointer;
-      transition: all var(--transition);
-      font-family: 'DM Mono', monospace;
-    }
-    .tool-btn:hover { background: var(--surface2); color: var(--text); }
-
-    #save-flash {
-      position: absolute;
-      inset: 0;
-      background: rgba(124, 92, 191, 0.1);
-      pointer-events: none;
-      opacity: 0;
-      transition: opacity 0.3s;
-      z-index: 20;
-    }
-    #save-flash.show { opacity: 1; }
-
-    /* Generating overlay */
-    #generating-overlay {
-      position: absolute;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--surface);
-      border: 1px solid var(--earth-light);
-      border-radius: 20px;
-      padding: 7px 18px;
-      font-size: 0.65rem;
-      color: var(--earth);
-      letter-spacing: 0.08em;
-      z-index: 10;
-      display: none;
-      box-shadow: 0 2px 12px rgba(124,92,191,0.15);
-      animation: fadeup 0.3s ease;
-    }
-    #generating-overlay.visible { display: block; }
-    @keyframes fadeup {
-      from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-      to   { opacity: 1; transform: translateX(-50%) translateY(0); }
-    }
-
-    /* ── Orb panel (right) ───────────────────────────────────────────── */
-    #orb-panel {
-      grid-area: orb-panel;
-      border-left: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 24px 16px 16px;
-      gap: 18px;
-    }
-    #orb-wrap {
-      position: relative;
-      width: 90px; height: 90px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      transition: opacity 0.4s ease;
       flex-shrink: 0;
     }
-    #orb {
-      width: 72px; height: 72px;
-      border-radius: 50%;
-      background: radial-gradient(circle at 38% 32%,
-        #e8d5b0,
-        #b07d5a 45%,
-        #7c5cbf 70%,
-        #4a2a7a
-      );
-      box-shadow: 0 0 24px rgba(176,125,90,0.22);
-      cursor: default;
-      transition: transform var(--transition), box-shadow var(--transition);
-      position: relative;
-      z-index: 2;
+    .step-hint.visible { opacity: 1; }
+
+    /* Palette */
+    .palette-scroll { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
+    .palette-scroll::-webkit-scrollbar { width: 3px; }
+    .palette-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .palette-empty { padding: 16px 4px; text-align: center; color: var(--text-muted); font-size: 0.75rem; line-height: 1.9; font-family: 'Cormorant Garamond', serif; font-style: italic; }
+    .palette-item {
+      border-radius: 8px; border: 1px solid var(--border); overflow: hidden;
+      cursor: pointer; position: relative; background: var(--surface2);
+      margin-bottom: 7px;
+      opacity: 0; transform: scale(0.92) translateY(8px);
+      animation: img-arrive 0.5s ease forwards;
+      transition: border-color var(--tr), box-shadow var(--tr);
     }
-    #orb-wrap::before, #orb-wrap::after {
-      content: '';
-      position: absolute;
-      border-radius: 50%;
-      border: 1px solid var(--clay);
-      opacity: 0;
-      pointer-events: none;
+    .palette-item:hover { border-color: var(--earth); box-shadow: 0 4px 16px rgba(124,92,191,0.15); }
+    .palette-item img { width: 100%; height: auto; display: block; }
+    .palette-item .hint-overlay {
+      position: absolute; inset: 0;
+      background: rgba(124,92,191,0.3); display: flex;
+      align-items: center; justify-content: center;
+      opacity: 0; transition: opacity var(--tr);
+      font-size: 0.58rem; color: white; letter-spacing: 0.08em;
     }
-    #orb-wrap.listening::before { width: 90px; height: 90px; animation: ripple 2.5s ease-out infinite; }
-    #orb-wrap.listening::after  { width: 90px; height: 90px; animation: ripple 2.5s ease-out infinite 0.8s; }
-    @keyframes ripple {
-      0%   { transform: scale(0.85); opacity: 0.5; }
-      100% { transform: scale(1.5);  opacity: 0; }
-    }
-    #orb-wrap.listening #orb { transform: scale(1.05); box-shadow: 0 0 40px rgba(176,125,90,0.3); }
-    #orb-wrap.speaking  #orb { animation: orbspeak 0.6s ease-in-out infinite alternate; box-shadow: 0 0 50px rgba(124,92,191,0.4); }
-    @keyframes orbspeak {
-      from { transform: scale(1.02); }
-      to   { transform: scale(1.1); }
+    .palette-item:hover .hint-overlay { opacity: 1; }
+    @keyframes img-arrive {
+      to { opacity: 1; transform: scale(1) translateY(0); }
     }
 
-    #transcript-wrap {
-      width: 100%;
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
+    /* Generating skeleton */
+    .gen-skeleton {
+      height: 70px; border-radius: 8px; margin-bottom: 7px;
+      background: linear-gradient(90deg, var(--surface2) 0%, var(--border) 50%, var(--surface2) 100%);
+      background-size: 200% 100%; animation: shimmer 1.6s infinite;
     }
-    #transcript-wrap::-webkit-scrollbar { width: 2px; }
-    #transcript-wrap::-webkit-scrollbar-thumb { background: var(--border); }
-    #transcript {
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 0.88rem;
-      font-style: italic;
-      color: var(--voice);
-      line-height: 1.9;
-      text-align: center;
-      min-height: 40px;
-      transition: opacity 0.4s;
-    }
+    @keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
 
-    /* ── Footer ──────────────────────────────────────────────────────── */
-    #footer {
-      grid-area: footer;
-      border-top: 1px solid var(--border);
-      background: var(--surface);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 0 24px;
-      gap: 16px;
+    /* Canvas */
+    .cv { grid-area: cv; position: relative; background: var(--bg); overflow: hidden; }
+    .cv canvas { display: block; }
+    .cv-toolbar {
+      position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 5px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 18px; padding: 4px 10px; z-index: 5;
+      opacity: 0; transition: opacity var(--tr); box-shadow: 0 2px 10px rgba(61,53,48,0.08);
     }
-    .footer-section { display: flex; align-items: center; gap: 10px; }
-    .ctrl-btn {
-      padding: 9px 22px;
-      border-radius: 8px;
+    .cv:hover .cv-toolbar { opacity: 1; }
+    .cv-btn {
+      background: none; border: none; color: var(--text-muted);
+      font-size: 0.6rem; letter-spacing: 0.07em; padding: 3px 8px;
+      border-radius: 12px; cursor: pointer; transition: all var(--tr);
       font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
-      cursor: pointer;
-      transition: all var(--transition);
-      border: 1px solid transparent;
     }
-    #startBtn { background: var(--earth); color: white; border-color: var(--earth); }
-    #startBtn:hover:not(:disabled) { background: var(--earth-light); box-shadow: 0 0 18px rgba(124,92,191,0.25); }
-    #startBtn:disabled { opacity: 0.4; cursor: default; }
-    #stopBtn { background: transparent; color: var(--text-muted); border-color: var(--border); }
-    #stopBtn:hover:not(:disabled) { border-color: var(--clay); color: var(--clay); }
-    #stopBtn:disabled { opacity: 0.3; cursor: default; }
-    #close-session-btn { background: transparent; color: var(--text-muted); border-color: var(--border); display: none; }
-    #close-session-btn.visible { display: block; }
-    #close-session-btn:hover { border-color: var(--clay); color: var(--clay); }
-    #footer-status { font-size: 0.62rem; color: var(--text-muted); letter-spacing: 0.06em; }
+    .cv-btn:hover { background: var(--surface2); color: var(--text); }
+    .gen-badge {
+      position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--earth-light);
+      border-radius: 18px; padding: 6px 16px; font-size: 0.6rem;
+      color: var(--earth); letter-spacing: 0.08em; z-index: 10;
+      box-shadow: 0 2px 12px rgba(124,92,191,0.15);
+      animation: img-arrive 0.3s ease forwards;
+    }
 
-    /* ── Close overlay ───────────────────────────────────────────────── */
-    #close-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(245, 240, 232, 0.94);
-      z-index: 100;
-      display: none;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 32px;
-      backdrop-filter: blur(8px);
+    /* Gesture prompt — appears in canvas when awaiting gesture */
+    .gesture-prompt {
+      position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%);
+      background: var(--surface); border: 1px solid var(--earth-light);
+      border-radius: 20px; padding: 8px 20px;
+      font-size: 0.62rem; color: var(--earth); letter-spacing: 0.12em;
+      z-index: 10; display: flex; align-items: center; gap: 8px;
+      box-shadow: 0 2px 16px rgba(124,92,191,0.18);
+      animation: img-arrive 0.4s ease forwards;
+      white-space: nowrap;
     }
-    #close-overlay.visible { display: flex; }
-    .close-orb {
-      width: 80px; height: 80px;
-      border-radius: 50%;
+    .gesture-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--clay); flex-shrink: 0;
+      animation: blink 0.8s ease-in-out infinite alternate;
+    }
+
+    /* Orb panel */
+    .op { grid-area: op; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; align-items: center; padding: 22px 14px 14px; gap: 16px; }
+    .orb-wrap { position: relative; width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .orb {
+      width: 64px; height: 64px; border-radius: 50%;
       background: radial-gradient(circle at 38% 32%, #e8d5b0, #b07d5a 45%, #7c5cbf 70%, #4a2a7a);
-      box-shadow: 0 0 60px rgba(176,125,90,0.3);
+      box-shadow: 0 0 20px rgba(176,125,90,0.22);
+      transition: transform var(--tr), box-shadow var(--tr);
+      position: relative; z-index: 2;
+    }
+    .orb-wrap::before, .orb-wrap::after {
+      content: ''; position: absolute; border-radius: 50%;
+      border: 1px solid var(--clay); opacity: 0; pointer-events: none;
+    }
+    .orb-wrap.listening::before { width: 80px; height: 80px; animation: ripple 2.5s ease-out infinite; }
+    .orb-wrap.listening::after  { width: 80px; height: 80px; animation: ripple 2.5s ease-out infinite 0.8s; }
+    @keyframes ripple { 0% { transform: scale(0.85); opacity: 0.5 } 100% { transform: scale(1.5); opacity: 0 } }
+    .orb-wrap.listening .orb { transform: scale(1.05); box-shadow: 0 0 36px rgba(176,125,90,0.3); }
+    .orb-wrap.speaking .orb  { animation: orbspeak 0.6s ease-in-out infinite alternate; box-shadow: 0 0 44px rgba(124,92,191,0.4); }
+    @keyframes orbspeak { from { transform: scale(1.02) } to { transform: scale(1.1) } }
+
+    .transcript {
+      width: 100%; flex: 1; min-height: 0; overflow-y: auto;
+      font-family: 'Cormorant Garamond', serif; font-size: 0.85rem;
+      font-style: italic; color: var(--voice); line-height: 1.9; text-align: center;
+    }
+    .transcript::-webkit-scrollbar { width: 2px; }
+    .transcript::-webkit-scrollbar-thumb { background: var(--border); }
+
+    /* Footer */
+    .ft { grid-area: ft; border-top: 1px solid var(--border); background: var(--surface); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+    .ft-group { display: flex; align-items: center; gap: 8px; }
+    .btn {
+      padding: 8px 20px; border-radius: 8px; font-family: 'DM Mono', monospace;
+      font-size: 0.7rem; letter-spacing: 0.08em; cursor: pointer;
+      transition: all var(--tr); border: 1px solid transparent;
+    }
+    .btn-start { background: var(--earth); color: white; border-color: var(--earth); }
+    .btn-start:hover:not(:disabled) { background: var(--earth-light); box-shadow: 0 0 16px rgba(124,92,191,0.25); }
+    .btn-start:disabled { opacity: 0.4; cursor: default; }
+    .btn-stop { background: transparent; color: var(--text-muted); border-color: var(--border); }
+    .btn-stop:hover:not(:disabled) { border-color: var(--clay); color: var(--clay); }
+    .btn-stop:disabled { opacity: 0.3; cursor: default; }
+    .ft-status { font-size: 0.6rem; color: var(--text-muted); letter-spacing: 0.06em; }
+
+    /* Close overlay */
+    .close-ov {
+      position: fixed; inset: 0; background: rgba(245,240,232,0.94);
+      z-index: 100; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 28px;
+      backdrop-filter: blur(8px); animation: fadein 0.4s ease;
+    }
+    .close-orb {
+      width: 72px; height: 72px; border-radius: 50%;
+      background: radial-gradient(circle at 38% 32%, #e8d5b0, #b07d5a 45%, #7c5cbf 70%, #4a2a7a);
+      box-shadow: 0 0 50px rgba(176,125,90,0.3);
       animation: orbspeak 0.8s ease-in-out infinite alternate;
     }
-    #close-message {
-      max-width: 420px;
-      text-align: center;
-      font-family: 'Cormorant Garamond', serif;
-      font-size: 1.3rem;
-      font-weight: 300;
-      line-height: 1.9;
-      color: var(--voice);
-      font-style: italic;
-      opacity: 0;
-      animation: fadein 1.2s ease forwards 0.3s;
+    .close-msg {
+      max-width: 400px; text-align: center;
+      font-family: 'Cormorant Garamond', serif; font-size: 1.2rem;
+      font-weight: 300; line-height: 1.9; color: var(--voice); font-style: italic;
     }
-    @keyframes fadein {
-      from { opacity: 0; transform: translateY(10px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-    .close-actions { display: flex; gap: 12px; opacity: 0; animation: fadein 0.8s ease forwards 2.5s; }
-    .close-btn-primary {
-      padding: 11px 28px;
-      background: var(--earth);
-      color: white;
-      border: none;
-      border-radius: 8px;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    .close-btn-primary:hover { background: var(--earth-light); }
-    .close-btn-secondary {
-      padding: 11px 28px;
-      background: transparent;
-      color: var(--text-dim);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      font-family: 'DM Mono', monospace;
-      font-size: 0.72rem;
-      letter-spacing: 0.1em;
-      cursor: pointer;
-      transition: all var(--transition);
-    }
-    .close-btn-secondary:hover { border-color: var(--text-dim); }
+    .close-btns { display: flex; gap: 10px; }
+    .close-primary { padding: 10px 24px; background: var(--earth); color: white; border: none; border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; }
+    .close-secondary { padding: 10px 24px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; }
+    @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
 
-    /* Paper texture overlay */
+    /* Paper texture */
     body::after {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      opacity: 0.6;
-      mix-blend-mode: multiply;
-      z-index: 1000;
+      content: ''; position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none; opacity: 0.6; mix-blend-mode: multiply; z-index: 1000;
     }
   </style>
 </head>
 
 <body>
-<div id="app">
-
-  <header id="header">
-    <div class="logo">Mix<span>Box</span></div>
-    <div id="status-bar">
-      <div class="status-dot" id="statusDot"></div>
-      <span id="statusText">ready</span>
-    </div>
-  </header>
-
-  <!-- Left sidebar: color + shape picker + generated palette -->
-  <aside id="sidebar">
-
-    <div class="section-header">choose a color</div>
-    <div id="color-grid"></div>
-
-    <div class="section-divider"></div>
-    <div class="section-header">or a shape</div>
-    <div id="shape-grid"></div>
-
-    <div class="section-divider"></div>
-    <div class="section-header">your palette</div>
-    <div id="palette-scroll">
-      <div id="palette-loading">
-        <div class="skeleton" style="height:70px"></div>
-        <div class="skeleton" style="height:70px;opacity:0.6"></div>
-      </div>
-      <div id="palette-grid">
-        <div id="palette-empty">images will appear here as you create them with Mix</div>
-      </div>
-    </div>
-
-  </aside>
-
-  <!-- Canvas -->
-  <main id="canvas-area">
-    <canvas id="motion-canvas"></canvas>
-    <div id="canvas-container">
-      <canvas id="fabricCanvas"></canvas>
-      <div id="canvas-toolbar">
-        <button class="tool-btn" onclick="removeSelected()">remove</button>
-        <button class="tool-btn" onclick="clearCanvas()">clear</button>
-        <button class="tool-btn" onclick="saveCanvas()">save png</button>
-      </div>
-    </div>
-    <div id="save-flash"></div>
-    <div id="generating-overlay">creating your image…</div>
-  </main>
-
-  <!-- Right panel: orb + transcript -->
-  <aside id="orb-panel">
-    <div id="orb-wrap"><div id="orb"></div></div>
-    <div id="transcript-wrap">
-      <div id="transcript">…</div>
-    </div>
-  </aside>
-
-  <footer id="footer">
-    <div class="footer-section">
-      <button class="ctrl-btn" id="startBtn" onclick="startSession()">start session</button>
-      <button class="ctrl-btn" id="stopBtn" disabled onclick="initiateClose()">end session</button>
-    </div>
-    <div id="footer-status"></div>
-    <div class="footer-section">
-      <button class="ctrl-btn" id="close-session-btn" onclick="initiateClose()">close &amp; save</button>
-    </div>
-  </footer>
-
-</div>
-
-<div id="close-overlay">
-  <div class="close-orb"></div>
-  <div id="close-message"></div>
-  <div class="close-actions">
-    <button class="close-btn-primary" onclick="saveAndEnd()">save my collage</button>
-    <button class="close-btn-secondary" onclick="endWithoutSaving()">end without saving</button>
-  </div>
-</div>
-
+<div id="root"></div>
 <audio id="ambient" src="/static/ambient.mp3" loop preload="auto"></audio>
 
 <script>
-// ── Color + Shape data ─────────────────────────────────────────────────────
+// ── React setup ────────────────────────────────────────────────────────────
+const { useState, useRef, useEffect, useCallback } = React;
+const html = htm.bind(React.createElement);
+
+// ── Data ───────────────────────────────────────────────────────────────────
 const COLORS = [
-  { name: 'blue',      hex: '#4a7fa5' },
-  { name: 'teal',      hex: '#3d8c8c' },
-  { name: 'green',     hex: '#4a7c59' },
-  { name: 'yellow',    hex: '#dbb84a' },
-  { name: 'orange',    hex: '#d4783c' },
-  { name: 'red',       hex: '#c24a3c' },
-  { name: 'pink',      hex: '#cc7a90' },
-  { name: 'purple',    hex: '#7c5cbf' },
-  { name: 'brown',     hex: '#7c5a3c' },
-  { name: 'black',     hex: '#2a2520' },
-  { name: 'white',     hex: '#f5f0e8' },
-  { name: 'gold',      hex: '#c9a840' },
+  { name: 'blue',   hex: '#4a7fa5' }, { name: 'teal',   hex: '#3d8c8c' },
+  { name: 'green',  hex: '#4a7c59' }, { name: 'yellow', hex: '#dbb84a' },
+  { name: 'orange', hex: '#d4783c' }, { name: 'red',    hex: '#c24a3c' },
+  { name: 'pink',   hex: '#cc7a90' }, { name: 'purple', hex: '#7c5cbf' },
+  { name: 'brown',  hex: '#7c5a3c' }, { name: 'black',  hex: '#2a2520' },
+  { name: 'white',  hex: '#f5f0e8' }, { name: 'gold',   hex: '#c9a840' },
 ];
-
 const SHAPES = [
-  { name: 'circle',   symbol: '◯' },
-  { name: 'square',   symbol: '□' },
-  { name: 'triangle', symbol: '△' },
-  { name: 'star',     symbol: '✦' },
-  { name: 'spiral',   symbol: '◎' },
-  { name: 'wave',     symbol: '∿' },
-  { name: 'cloud',    symbol: '☁' },
+  { name: 'circle', s: '\u25EF' }, { name: 'square', s: '\u25A1' },
+  { name: 'triangle', s: '\u25B3' }, { name: 'star', s: '\u2726' },
+  { name: 'spiral', s: '\u25CE' }, { name: 'wave', s: '\u223F' },
+  { name: 'cloud', s: '\u2601' },
 ];
-
-const closureMessages = [
-  "You showed up today and made something. That matters — whatever it means to you.",
-  "What you made here belongs to you. Every choice on this canvas was yours.",
+const CLOSE_MSGS = [
+  "You showed up today and made something. That matters.",
+  "What you made here belongs to you. Every choice was yours.",
   "Something happened here today. I witnessed it. Thank you.",
-  "You brought yourself to this canvas. Whatever comes next, you carry this with you.",
+  "You brought yourself to this canvas. You carry this with you.",
 ];
 
-// ── State ──────────────────────────────────────────────────────────────────
-let ws, audioCtx, mediaStream, processor;
-let canvasInterval = null;
-let playbackQueue = [], isPlaying = false;
-let fabricCanvas = null;
-let sessionActive = false;
-let motionCtx = null, prevFrameData = null, motionLines = [];
+// ── Audio helpers (module-level refs) ──────────────────────────────────────
+let _audioCtx = null;
+let _playbackQueue = [];
+let _isPlaying = false;
+let _orbStateSetter = null;
 
-// ── DOM refs ───────────────────────────────────────────────────────────────
-const orbWrap          = document.getElementById('orb-wrap');
-const statusDot        = document.getElementById('statusDot');
-const statusText       = document.getElementById('statusText');
-const footerStatus     = document.getElementById('footer-status');
-const transcriptEl     = document.getElementById('transcript');
-const startBtn         = document.getElementById('startBtn');
-const stopBtn          = document.getElementById('stopBtn');
-const closeBtn         = document.getElementById('close-session-btn');
-const paletteGrid      = document.getElementById('palette-grid');
-const paletteLoad      = document.getElementById('palette-loading');
-const closeOverlay     = document.getElementById('close-overlay');
-const closeMessage     = document.getElementById('close-message');
-const ambient          = document.getElementById('ambient');
-const motionCanvas     = document.getElementById('motion-canvas');
-const generatingOverlay = document.getElementById('generating-overlay');
-
-// ── Build color swatches ───────────────────────────────────────────────────
-function buildColorGrid() {
-  const grid = document.getElementById('color-grid');
-  COLORS.forEach(c => {
-    const swatch = document.createElement('div');
-    swatch.className = 'color-swatch';
-    swatch.setAttribute('data-name', c.name);
-    swatch.style.backgroundColor = c.hex;
-    swatch.title = c.name;
-    swatch.addEventListener('click', () => selectColor(c.name, c.hex, swatch));
-    grid.appendChild(swatch);
-  });
-}
-
-// ── Build shape buttons ────────────────────────────────────────────────────
-function buildShapeGrid() {
-  const grid = document.getElementById('shape-grid');
-  SHAPES.forEach(s => {
-    const btn = document.createElement('button');
-    btn.className = 'shape-btn';
-    btn.setAttribute('data-name', s.name);
-    btn.textContent = s.symbol;
-    btn.title = s.name;
-    btn.addEventListener('click', () => selectShape(s.name, btn));
-    grid.appendChild(btn);
-  });
-}
-
-// ── Canvas action: color selected ─────────────────────────────────────────
-function selectColor(name, hex, el) {
-  if (!sessionActive) return;
-  // Visual feedback
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-  document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  // Send to backend
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'canvas_action', action_type: 'color', value: name, hex }));
-  }
-}
-
-// ── Canvas action: shape selected ─────────────────────────────────────────
-function selectShape(name, el) {
-  if (!sessionActive) return;
-  // Visual feedback
-  document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
-  document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('selected'));
-  el.classList.add('selected');
-  // Send to backend
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'canvas_action', action_type: 'shape', value: name }));
-  }
-}
-
-// ── Motion canvas (ambient background effect) ─────────────────────────────
-function initMotionCanvas() {
-  const area = document.getElementById('canvas-area');
-  motionCanvas.width  = area.clientWidth;
-  motionCanvas.height = area.clientHeight;
-  motionCtx = motionCanvas.getContext('2d');
-}
-
-function createLine(x, y, intensity) {
-  const angle = Math.random() * Math.PI * 2;
-  const colors = [
-    `rgba(176, 125, 90, `,
-    `rgba(107, 124, 90, `,
-    `rgba(124, 92, 191, `,
-    `rgba(139, 111, 78, `,
-  ];
-  return {
-    x, y,
-    vx: Math.cos(angle) * (0.3 + intensity * 0.8),
-    vy: Math.sin(angle) * (0.3 + intensity * 0.8),
-    length: 40 + intensity * 120,
-    remainingLength: 40 + intensity * 120,
-    alpha: 0.06 + intensity * 0.15,
-    color: colors[Math.floor(Math.random() * colors.length)],
-    width: 0.5 + intensity * 1.5,
-    age: 0,
-    maxAge: 80 + Math.random() * 120,
-  };
-}
-
-function updateMotionCanvas(motionScore) {
-  if (!motionCtx) return;
-  const w = motionCanvas.width;
-  const h = motionCanvas.height;
-  motionCtx.fillStyle = 'rgba(245, 240, 232, 0.025)';
-  motionCtx.fillRect(0, 0, w, h);
-
-  if (motionScore > 0.02) {
-    const count = Math.floor(motionScore * 6);
-    for (let i = 0; i < count; i++) {
-      motionLines.push(createLine(Math.random() * w, Math.random() * h, motionScore));
-    }
-  }
-
-  motionLines = motionLines.filter(line => {
-    line.age++;
-    if (line.age > line.maxAge || line.remainingLength <= 0) return false;
-    const fadeAlpha = line.alpha * (1 - line.age / line.maxAge);
-    motionCtx.beginPath();
-    motionCtx.moveTo(line.x, line.y);
-    line.x += line.vx;
-    line.y += line.vy;
-    line.remainingLength -= 3;
-    line.vx += (Math.random() - 0.5) * 0.08;
-    line.vy += (Math.random() - 0.5) * 0.08;
-    motionCtx.lineTo(line.x, line.y);
-    motionCtx.strokeStyle = `${line.color}${fadeAlpha})`;
-    motionCtx.lineWidth = line.width;
-    motionCtx.stroke();
-    return true;
-  });
-
-  if (motionLines.length > 300) motionLines = motionLines.slice(-200);
-}
-
-function startAmbientMotion() {
-  let frame = 0;
-  function loop() {
-    if (!sessionActive) return;
-    frame++;
-    if (frame % 300 === 0 && motionLines.length < 10) updateMotionCanvas(0.03);
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
-}
-
-// ── Canvas (Fabric.js) setup ───────────────────────────────────────────────
-function initCanvas() {
-  const container = document.getElementById('canvas-container');
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-  document.getElementById('fabricCanvas').width  = w;
-  document.getElementById('fabricCanvas').height = h;
-  fabricCanvas = new fabric.Canvas('fabricCanvas', {
-    width: w, height: h,
-    backgroundColor: '#f9f5ef',
-    selection: true,
-  });
-
-  // Drag from palette
-  paletteGrid.addEventListener('dragstart', (e) => {
-    const item = e.target.closest('.palette-item');
-    if (!item) return;
-    e.dataTransfer.setData('text/plain', item.dataset.src);
-  });
-  const canvasEl = fabricCanvas.upperCanvasEl;
-  canvasEl.addEventListener('dragover', (e) => { e.preventDefault(); });
-  canvasEl.addEventListener('drop', (e) => {
-    e.preventDefault();
-    const src = e.dataTransfer.getData('text/plain');
-    if (!src) return;
-    const rect = canvasEl.getBoundingClientRect();
-    addImageToCanvas(src, e.clientX - rect.left, e.clientY - rect.top);
-  });
-}
-
-function addImageToCanvas(src, x = null, y = null) {
-  fabric.Image.fromURL(src, (img) => {
-    const scale = Math.min(260 / img.width, 340 / img.height, 1);
-    // Slight random offset so stacked images fan out
-    const offsetX = (Math.random() - 0.5) * 40;
-    const offsetY = (Math.random() - 0.5) * 40;
-    img.set({
-      left: x ?? (fabricCanvas.width  / 2 - (img.width  * scale) / 2 + offsetX),
-      top:  y ?? (fabricCanvas.height / 2 - (img.height * scale) / 2 + offsetY),
-      scaleX: scale, scaleY: scale,
-      cornerStyle: 'circle', cornerColor: '#7c5cbf',
-      cornerSize: 8, transparentCorners: false,
-      angle: (Math.random() - 0.5) * 6,
-    });
-    fabricCanvas.add(img);
-    fabricCanvas.setActiveObject(img);
-    fabricCanvas.renderAll();
-  }, { crossOrigin: 'anonymous' });
-}
-
-function removeSelected() {
-  const obj = fabricCanvas.getActiveObject();
-  if (obj) { fabricCanvas.remove(obj); fabricCanvas.renderAll(); }
-}
-
-function clearCanvas() {
-  fabricCanvas.clear();
-  fabricCanvas.backgroundColor = '#f9f5ef';
-  fabricCanvas.renderAll();
-}
-
-function saveCanvas() {
-  const flash = document.getElementById('save-flash');
-  flash.classList.add('show');
-  setTimeout(() => flash.classList.remove('show'), 400);
-  const a = document.createElement('a');
-  a.href = fabricCanvas.toDataURL({ format: 'png', quality: 1 });
-  a.download = `mixbox-${Date.now()}.png`;
-  a.click();
-}
-
-// ── Audio ──────────────────────────────────────────────────────────────────
 function float32ToInt16(f32) {
   const out = new Int16Array(f32.length);
   for (let i = 0; i < f32.length; i++) {
@@ -872,218 +308,609 @@ function float32ToInt16(f32) {
 }
 
 function enqueueAudio(buffer) {
-  playbackQueue.push(buffer);
-  if (!isPlaying) drainQueue();
+  _playbackQueue.push(buffer);
+  if (!_isPlaying) drainQueue();
 }
 
 function drainQueue() {
-  if (!playbackQueue.length) { isPlaying = false; setOrbState('listening'); return; }
-  isPlaying = true;
-  setOrbState('speaking');
-  const int16 = new Int16Array(playbackQueue.shift());
-  const f32   = new Float32Array(int16.length);
+  if (!_playbackQueue.length || !_audioCtx) {
+    _isPlaying = false;
+    if (_orbStateSetter) _orbStateSetter('listening');
+    return;
+  }
+  _isPlaying = true;
+  if (_orbStateSetter) _orbStateSetter('speaking');
+  const int16 = new Int16Array(_playbackQueue.shift());
+  const f32 = new Float32Array(int16.length);
   for (let i = 0; i < int16.length; i++) f32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7fff);
-  const buf = audioCtx.createBuffer(1, f32.length, 24000);
+  const buf = _audioCtx.createBuffer(1, f32.length, 24000);
   buf.copyToChannel(f32, 0);
-  const src = audioCtx.createBufferSource();
+  const src = _audioCtx.createBufferSource();
   src.buffer = buf;
-  src.connect(audioCtx.destination);
+  src.connect(_audioCtx.destination);
   src.onended = drainQueue;
   src.start();
 }
 
-// ── UI helpers ─────────────────────────────────────────────────────────────
-function setStatus(msg) {
-  statusText.textContent = msg;
-  footerStatus.textContent = msg;
+// ── Components ─────────────────────────────────────────────────────────────
+
+function Header({ status, orbState }) {
+  const dotCls = 'status-dot' + (orbState === 'listening' ? ' live' : orbState === 'speaking' ? ' speaking' : '');
+  return html`
+    <header className="hd">
+      <div className="logo">Mix<span className="logo-accent">Box</span></div>
+      <div className="status-bar">
+        <div className=${dotCls} />
+        <span>${status}</span>
+      </div>
+    </header>
+  `;
 }
 
-function setOrbState(state) {
-  orbWrap.className = state === 'idle' ? '' : state;
-  statusDot.className = 'status-dot' + (
-    state === 'listening' ? ' live' : state === 'speaking' ? ' speaking' : ''
-  );
+function ColorPicker({ selected, onSelect, disabled }) {
+  return html`
+    <div className="color-grid">
+      ${COLORS.map(c => html`
+        <div
+          key=${c.name}
+          className=${[
+            'color-swatch',
+            selected === c.name && 'sel',
+            c.name === 'white' && !selected && 'white-ring',
+            disabled && 'dimmed',
+          ].filter(Boolean).join(' ')}
+          style=${{ backgroundColor: c.hex }}
+          title=${c.name}
+          onClick=${() => !disabled && onSelect(c)}
+        />
+      `)}
+    </div>
+  `;
 }
 
-function addPaletteImage(src) {
-  const empty = document.getElementById('palette-empty');
-  if (empty) empty.remove();
-  const item = document.createElement('div');
-  item.className = 'palette-item';
-  item.draggable = true;
-  item.dataset.src = src;
-  const img  = document.createElement('img'); img.src = src; img.alt = '';
-  const hint = document.createElement('div');
-  hint.className = 'drag-hint'; hint.textContent = 'drag to canvas';
-  item.appendChild(img); item.appendChild(hint);
-  item.addEventListener('click', () => addImageToCanvas(src));
-  paletteGrid.appendChild(item);
-  // Auto-place on canvas for immediate feedback
-  addImageToCanvas(src);
+function ShapePicker({ selected, onSelect, disabled, ready }) {
+  return html`
+    <div className="shape-grid">
+      ${SHAPES.map(s => html`
+        <button
+          key=${s.name}
+          className=${[
+            'shape-btn',
+            selected === s.name && 'sel',
+            disabled && 'dimmed',
+            !disabled && ready && !selected && 'ready',
+          ].filter(Boolean).join(' ')}
+          title=${s.name}
+          onClick=${() => !disabled && onSelect(s)}
+        >${s.s}</button>
+      `)}
+    </div>
+  `;
 }
 
-function showPaletteLoading(show) {
-  paletteLoad.classList.toggle('visible', show);
+function PaletteImage({ src, onClick }) {
+  return html`
+    <div className="palette-item" onClick=${() => onClick(src)} draggable="true"
+      onDragStart=${(e) => e.dataTransfer.setData('text/plain', src)}>
+      <img src=${src} alt="" />
+      <div className="hint-overlay">click or drag to canvas</div>
+    </div>
+  `;
 }
 
-function showGenerating(show) {
-  generatingOverlay.classList.toggle('visible', show);
-  if (show) {
-    setTimeout(() => generatingOverlay.classList.remove('visible'), 15000);
-  }
+function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGenerating, sessionActive, flowStep, onImageClick }) {
+  // Disabled states based on flow step
+  const generating = flowStep === 'generating_gesture';
+  const colorDisabled  = !sessionActive || generating;
+  const shapeDisabled  = !sessionActive || !selectedColor || generating;
+  const shapeReady     = sessionActive && !!selectedColor && flowStep === 'color_picked';
+
+  // Section header labels guide the user through the ritual
+  const colorLabel = !sessionActive
+    ? 'choose a color'
+    : flowStep === 'idle' ? 'start — choose a color' : 'color';
+  const shapeLabel = shapeReady
+    ? 'now — pick a shape'
+    : flowStep === 'awaiting_gesture' || flowStep === 'generating_gesture'
+      ? 'shape'
+      : 'then a shape';
+
+  return html`
+    <aside className="sb">
+      <div className=${['section-hd', shapeReady || flowStep === 'idle' ? '' : 'active'].filter(Boolean).join(' ')}>
+        ${colorLabel}
+      </div>
+      <${ColorPicker} selected=${selectedColor} onSelect=${onColor} disabled=${colorDisabled} />
+      <div className="section-div" />
+      <div className=${['section-hd', shapeReady ? 'active' : ''].filter(Boolean).join(' ')}>
+        ${shapeLabel}
+      </div>
+      <${ShapePicker}
+        selected=${selectedShape}
+        onSelect=${onShape}
+        disabled=${shapeDisabled}
+        ready=${shapeReady}
+      />
+      <div className="section-div" />
+      <div className="section-hd">your palette</div>
+      <div className="palette-scroll">
+        ${isGenerating && html`<div className="gen-skeleton" />`}
+        ${images.length === 0 && !isGenerating && html`
+          <div className="palette-empty">choose color → shape → gesture and your image will appear here</div>
+        `}
+        ${images.map(img => html`
+          <${PaletteImage} key=${img.id} src=${img.src} onClick=${onImageClick} />
+        `)}
+      </div>
+    </aside>
+  `;
 }
 
-// ── Mic capture ────────────────────────────────────────────────────────────
-function startMicCapture() {
-  const source = audioCtx.createMediaStreamSource(mediaStream);
-  processor = audioCtx.createScriptProcessor(4096, 1, 1);
-  processor.onaudioprocess = (e) => {
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-    const input = e.inputBuffer.getChannelData(0);
-    const ratio = audioCtx.sampleRate / 16000;
-    const outLen = Math.round(input.length / ratio);
-    const res = new Float32Array(outLen);
-    for (let i = 0; i < outLen; i++) res[i] = input[Math.round(i * ratio)];
-    ws.send(float32ToInt16(res).buffer);
+function CanvasArea({ fabricRef, isGenerating, awaitingGesture }) {
+  const containerRef = useRef(null);
+  const canvasElRef = useRef(null);
+
+  useEffect(() => {
+    if (!canvasElRef.current || !containerRef.current) return;
+    const w = containerRef.current.clientWidth;
+    const h = containerRef.current.clientHeight;
+    canvasElRef.current.width = w;
+    canvasElRef.current.height = h;
+    const fc = new fabric.Canvas(canvasElRef.current, {
+      width: w, height: h, backgroundColor: '#f9f5ef', selection: true,
+    });
+    fabricRef.current = fc;
+
+    const upper = fc.upperCanvasEl;
+    upper.addEventListener('dragover', (e) => e.preventDefault());
+    upper.addEventListener('drop', (e) => {
+      e.preventDefault();
+      const src = e.dataTransfer.getData('text/plain');
+      if (!src) return;
+      const rect = upper.getBoundingClientRect();
+      addToFabric(fc, src, e.clientX - rect.left, e.clientY - rect.top);
+    });
+
+    const onResize = () => {
+      fc.setWidth(containerRef.current.clientWidth);
+      fc.setHeight(containerRef.current.clientHeight);
+      fc.renderAll();
+    };
+    window.addEventListener('resize', onResize);
+    return () => { window.removeEventListener('resize', onResize); fc.dispose(); };
+  }, []);
+
+  const remove = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { fc.remove(o); fc.renderAll(); } };
+  const clear  = () => { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#f9f5ef'; fc.renderAll(); };
+  const save   = () => {
+    const fc = fabricRef.current; if (!fc) return;
+    const a = document.createElement('a');
+    a.href = fc.toDataURL({ format: 'png', quality: 1 });
+    a.download = 'mixbox-' + Date.now() + '.png';
+    a.click();
   };
-  source.connect(processor);
-  processor.connect(audioCtx.destination);
+
+  return html`
+    <main className="cv" ref=${containerRef}>
+      <canvas ref=${canvasElRef} />
+      <div className="cv-toolbar">
+        <button className="cv-btn" onClick=${remove}>remove</button>
+        <button className="cv-btn" onClick=${clear}>clear</button>
+        <button className="cv-btn" onClick=${save}>save png</button>
+      </div>
+      ${isGenerating && html`<div className="gen-badge">creating your image\u2026</div>`}
+      ${awaitingGesture && html`
+        <div className="gesture-prompt">
+          <span className="gesture-dot" />
+          move \u00b7 speak \u00b7 or both
+        </div>
+      `}
+    </main>
+  `;
 }
 
-// ── Canvas streaming to Mix ────────────────────────────────────────────────
-function startCanvasStream() {
-  canvasInterval = setInterval(() => {
-    if (!ws || ws.readyState !== WebSocket.OPEN || !fabricCanvas) return;
-    const base64 = fabricCanvas.toDataURL('image/jpeg', 0.6).split(',')[1];
-    ws.send(JSON.stringify({ type: 'image', data: base64, mimeType: 'image/jpeg', source: 'canvas' }));
-  }, 1500);
+function OrbPanel({ orbState, transcript }) {
+  return html`
+    <aside className="op">
+      <div className=${['orb-wrap', orbState !== 'idle' && orbState].filter(Boolean).join(' ')}>
+        <div className="orb" />
+      </div>
+      <div className="transcript">${transcript || '\u2026'}</div>
+    </aside>
+  `;
 }
 
-// ── Session lifecycle ──────────────────────────────────────────────────────
-async function startSession() {
-  startBtn.disabled = true;
-  setStatus('requesting mic…');
-  try {
-    audioCtx    = new AudioContext();
-    mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-  } catch {
-    setStatus('mic access denied');
-    startBtn.disabled = false;
-    return;
+function Footer({ sessionActive, status, onStart, onStop }) {
+  return html`
+    <footer className="ft">
+      <div className="ft-group">
+        <button className="btn btn-start" disabled=${sessionActive} onClick=${onStart}>start session</button>
+        <button className="btn btn-stop" disabled=${!sessionActive} onClick=${onStop}>end session</button>
+      </div>
+      <div className="ft-status">${status}</div>
+      <div className="ft-group">
+        ${sessionActive && html`<button className="btn btn-stop" onClick=${onStop}>close & save</button>`}
+      </div>
+    </footer>
+  `;
+}
+
+function CloseOverlay({ message, onSave, onEnd }) {
+  return html`
+    <div className="close-ov">
+      <div className="close-orb" />
+      <div className="close-msg">${message}</div>
+      <div className="close-btns">
+        <button className="close-primary" onClick=${onSave}>save my collage</button>
+        <button className="close-secondary" onClick=${onEnd}>end without saving</button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Fabric helper ──────────────────────────────────────────────────────────
+function addToFabric(fc, src, x, y) {
+  if (!fc) return;
+  fabric.Image.fromURL(src, (img) => {
+    const scale = Math.min(260 / img.width, 340 / img.height, 1);
+    img.set({
+      left: x != null ? x : fc.width / 2 - (img.width * scale) / 2 + (Math.random() - 0.5) * 50,
+      top:  y != null ? y : fc.height / 2 - (img.height * scale) / 2 + (Math.random() - 0.5) * 50,
+      scaleX: scale, scaleY: scale,
+      cornerStyle: 'circle', cornerColor: '#7c5cbf',
+      cornerSize: 8, transparentCorners: false,
+      angle: (Math.random() - 0.5) * 8,
+    });
+    fc.add(img);
+    fc.setActiveObject(img);
+    fc.renderAll();
+  }, { crossOrigin: 'anonymous' });
+}
+
+// ── App ────────────────────────────────────────────────────────────────────
+function App() {
+  const [sessionActive, setSessionActive] = useState(false);
+  const [status,        setStatus]        = useState('click start to meet Mix');
+  const [orbState,      setOrbState]      = useState('idle');
+  const [selectedColor, setSelectedColor] = useState(null);
+  const [selectedShape, setSelectedShape] = useState(null);
+  const [images,        setImages]        = useState([]);
+  const [transcript,    setTranscript]    = useState('');
+  const [isGenerating,  setIsGenerating]  = useState(false);
+  const [closing,       setClosing]       = useState(false);
+
+  // flowStep: 'idle' | 'color_picked' | 'awaiting_gesture' | 'generating_gesture'
+  const [flowStep, setFlowStep] = useState('idle');
+
+  const wsRef            = useRef(null);
+  const fabricRef        = useRef(null);
+  const mediaStreamRef   = useRef(null);
+  const processorRef     = useRef(null);
+  const canvasIntervalRef = useRef(null);
+
+  // Video / motion detection refs
+  const videoRef      = useRef(null);
+  const motionCanRef  = useRef(null);  // hidden canvas for pixel diff
+  const motionRef     = useRef(null);  // { active, intervalId, timeoutId }
+  const hasVideoRef   = useRef(false);
+
+  // Wire up orb state setter for audio module
+  _orbStateSetter = setOrbState;
+
+  // ── Motion detection ───────────────────────────────────────────────────
+
+  function stopMotionDetection() {
+    const r = motionRef.current;
+    if (!r) return;
+    r.active = false;
+    if (r.intervalId) clearInterval(r.intervalId);
+    if (r.timeoutId)  clearTimeout(r.timeoutId);
+    motionRef.current = null;
   }
 
-  setStatus('connecting to Mix…');
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
-  ws.binaryType = 'arraybuffer';
+  function fireGesture(intensity) {
+    stopMotionDetection();
+    setFlowStep('generating_gesture');
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'gesture', intensity }));
+    }
+  }
 
-  ws.onopen = () => {
-    sessionActive = true;
-    setStatus('Mix is waking up…');
-    setOrbState('listening');
-    stopBtn.disabled = false;
-    closeBtn.classList.add('visible');
-    ambient.volume = 0.08;
-    ambient.play().catch(() => {});
-    startMicCapture();
-    startCanvasStream();
-    startAmbientMotion();
-    transcriptEl.textContent = '';
-  };
+  function startMotionDetection() {
+    stopMotionDetection(); // clear any previous run
 
-  ws.onmessage = (event) => {
-    if (event.data instanceof ArrayBuffer) {
-      enqueueAudio(event.data);
+    const video  = videoRef.current;
+    const canvas = motionCanRef.current;
+
+    if (!video || !canvas || !hasVideoRef.current) {
+      // No camera — give the user 10 seconds to speak, then fire gently
+      const tid = setTimeout(() => fireGesture('gentle'), 10000);
+      motionRef.current = { active: false, intervalId: null, timeoutId: tid };
       return;
     }
-    try {
-      const msg = JSON.parse(event.data);
 
-      if (msg.transcript) {
-        transcriptEl.textContent = msg.transcript;
-        setStatus('Mix is speaking…');
+    const ctx = canvas.getContext('2d');
+    canvas.width  = 160;
+    canvas.height = 120;
+    let prevData   = null;
+    let motionCount = 0;
+
+    function detect() {
+      if (!motionRef.current || !motionRef.current.active) return;
+      try {
+        ctx.drawImage(video, 0, 0, 160, 120);
+        const curr = ctx.getImageData(0, 0, 160, 120).data;
+        if (prevData) {
+          let diff = 0;
+          for (let i = 0; i < curr.length; i += 4) {
+            diff += Math.abs(curr[i]   - prevData[i])
+                  + Math.abs(curr[i+1] - prevData[i+1])
+                  + Math.abs(curr[i+2] - prevData[i+2]);
+          }
+          // Average per-pixel diff (0–255 scale)
+          const avgDiff = diff / (160 * 120 * 3);
+          if (avgDiff > 12) {
+            motionCount++;
+            if (motionCount >= 2) {
+              // Gesture confirmed — classify intensity
+              const intensity = avgDiff > 35 ? 'strong' : avgDiff > 20 ? 'medium' : 'gentle';
+              fireGesture(intensity);
+              return;
+            }
+          } else {
+            motionCount = 0;
+          }
+        }
+        prevData = new Uint8ClampedArray(curr);
+      } catch (_) {
+        // drawImage fails if video not yet playing; just skip frame
       }
+    }
 
-      if (msg.type === 'generated_image') {
-        showPaletteLoading(false);
-        showGenerating(false);
-        addPaletteImage(msg.url || `data:image/jpeg;base64,${msg.data}`);
-        setStatus('image added to your palette');
-        setTimeout(() => setStatus(''), 3000);
-      }
+    // 1 second settle time — lets the user read the gesture prompt
+    const startTid = setTimeout(() => {
+      if (!motionRef.current) return;
+      motionRef.current.active = true;
+      const iid = setInterval(detect, 200); // 5 fps — reliable, low CPU
+      motionRef.current.intervalId = iid;
 
-      if (msg.type === 'generating_canvas_image') {
-        showGenerating(true);
-        setStatus('creating your image…');
-      }
+      // 12-second fallback — fire with 'gentle' even if no motion detected
+      // (user may have spoken without moving)
+      motionRef.current.timeoutId = setTimeout(() => {
+        if (motionRef.current && motionRef.current.active) {
+          fireGesture('gentle');
+        }
+      }, 12000);
+    }, 1000);
 
-      if (msg.error) {
-        setStatus(`error: ${msg.error}`);
-      }
-    } catch (_) {}
-  };
-
-  ws.onclose = () => {
-    sessionActive = false;
-    setStatus('session ended');
-    setOrbState('idle');
-  };
-  ws.onerror = () => {
-    setStatus('connection error — is the server running?');
-  };
-}
-
-function initiateClose() {
-  if (!sessionActive) { endWithoutSaving(); return; }
-  closeMessage.textContent = closureMessages[Math.floor(Math.random() * closureMessages.length)];
-  closeOverlay.classList.add('visible');
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'session_close' }));
+    motionRef.current = { active: false, intervalId: null, timeoutId: startTid };
   }
+
+  // ── Canvas action handlers ─────────────────────────────────────────────
+  const handleColor = useCallback((c) => {
+    // Re-picking a color resets the ritual
+    stopMotionDetection();
+    setSelectedColor(c.name);
+    setSelectedShape(null);
+    setFlowStep('color_picked');
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'canvas_action', action_type: 'color', value: c.name, hex: c.hex,
+      }));
+    }
+  }, []);
+
+  const handleShape = useCallback((s) => {
+    setSelectedShape(s.name);
+    setFlowStep('awaiting_gesture');
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'canvas_action', action_type: 'shape', value: s.name,
+      }));
+    }
+    // Open the gesture window
+    startMotionDetection();
+  }, []);
+
+  const handleImageClick = useCallback((src) => {
+    addToFabric(fabricRef.current, src);
+  }, []);
+
+  // ── Start session ──────────────────────────────────────────────────────
+  const startSession = useCallback(async () => {
+    setStatus('requesting mic & camera\u2026');
+
+    // Try audio + video; fall back to audio-only if camera is denied
+    try {
+      _audioCtx = new AudioContext();
+      mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: { width: 320, height: 240, facingMode: 'user' },
+      });
+      hasVideoRef.current = true;
+    } catch {
+      try {
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
+          audio: true, video: false,
+        });
+        hasVideoRef.current = false;
+      } catch {
+        setStatus('mic access denied');
+        return;
+      }
+    }
+
+    // Point the hidden video element at the media stream
+    if (hasVideoRef.current && videoRef.current) {
+      videoRef.current.srcObject = mediaStreamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+
+    setStatus('connecting to Mix\u2026');
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(proto + '://' + location.host + '/ws');
+    ws.binaryType = 'arraybuffer';
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setSessionActive(true);
+      setStatus('Mix is waking up\u2026');
+      setOrbState('listening');
+      setTranscript('');
+      setFlowStep('idle');
+
+      // Ambient audio
+      const amb = document.getElementById('ambient');
+      amb.volume = 0.08;
+      amb.play().catch(() => {});
+
+      // Mic capture
+      const source = _audioCtx.createMediaStreamSource(mediaStreamRef.current);
+      const proc   = _audioCtx.createScriptProcessor(4096, 1, 1);
+      proc.onaudioprocess = (e) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        const input = e.inputBuffer.getChannelData(0);
+        const ratio  = _audioCtx.sampleRate / 16000;
+        const outLen = Math.round(input.length / ratio);
+        const res    = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) res[i] = input[Math.round(i * ratio)];
+        ws.send(float32ToInt16(res).buffer);
+      };
+      source.connect(proc);
+      proc.connect(_audioCtx.destination);
+      processorRef.current = proc;
+
+      // Canvas stream — Mix sees the collage every 2 seconds
+      canvasIntervalRef.current = setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN || !fabricRef.current) return;
+        const b64 = fabricRef.current.toDataURL('image/jpeg', 0.5).split(',')[1];
+        ws.send(JSON.stringify({ type: 'image', data: b64, mimeType: 'image/jpeg', source: 'canvas' }));
+      }, 2000);
+    };
+
+    ws.onmessage = (event) => {
+      if (event.data instanceof ArrayBuffer) {
+        enqueueAudio(event.data);
+        return;
+      }
+      try {
+        const msg = JSON.parse(event.data);
+
+        if (msg.transcript) {
+          setTranscript(msg.transcript);
+        }
+
+        if (msg.type === 'generated_image') {
+          setIsGenerating(false);
+          // Reset ritual — user starts fresh with a new color
+          setFlowStep('idle');
+          setSelectedColor(null);
+          setSelectedShape(null);
+          const src = msg.url || 'data:image/jpeg;base64,' + msg.data;
+          setImages(prev => [{ id: Date.now() + Math.random(), src }, ...prev]);
+          addToFabric(fabricRef.current, src);
+          setStatus('image added');
+          setTimeout(() => setStatus(''), 2500);
+        }
+
+        if (msg.type === 'generating_canvas_image') {
+          setIsGenerating(true);
+          setStatus('creating your image\u2026');
+        }
+
+        if (msg.error) {
+          setStatus('error: ' + msg.error);
+        }
+      } catch (_) {}
+    };
+
+    ws.onclose = () => {
+      setSessionActive(false);
+      setStatus('session ended');
+      setOrbState('idle');
+      setFlowStep('idle');
+    };
+    ws.onerror = () => {
+      setStatus('connection error \u2014 is the server running?');
+    };
+  }, []);
+
+  // ── End session ────────────────────────────────────────────────────────
+  const endSession = useCallback(() => {
+    stopMotionDetection();
+    if (processorRef.current)    { processorRef.current.disconnect(); processorRef.current = null; }
+    if (mediaStreamRef.current)  { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
+    if (canvasIntervalRef.current) { clearInterval(canvasIntervalRef.current); canvasIntervalRef.current = null; }
+    if (wsRef.current)           { wsRef.current.close(); wsRef.current = null; }
+    if (_audioCtx)               { _audioCtx.close(); _audioCtx = null; }
+    if (videoRef.current)        { videoRef.current.srcObject = null; }
+    const amb = document.getElementById('ambient');
+    amb.pause(); amb.currentTime = 0;
+    _playbackQueue = []; _isPlaying = false;
+    hasVideoRef.current = false;
+    setSessionActive(false); setOrbState('idle');
+    setStatus('session ended \u2014 click start to begin again');
+    setTranscript(''); setSelectedColor(null); setSelectedShape(null);
+    setFlowStep('idle'); setClosing(false);
+  }, []);
+
+  const initiateClose = useCallback(() => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'session_close' }));
+    }
+    setClosing(true);
+  }, []);
+
+  const saveAndEnd = useCallback(() => {
+    const fc = fabricRef.current;
+    if (fc) {
+      const a = document.createElement('a');
+      a.href = fc.toDataURL({ format: 'png', quality: 1 });
+      a.download = 'mixbox-' + Date.now() + '.png';
+      a.click();
+    }
+    setTimeout(endSession, 500);
+  }, [endSession]);
+
+  const awaitingGesture = flowStep === 'awaiting_gesture';
+
+  return html`
+    <div className="app-grid">
+      <${Header} status=${status} orbState=${orbState} />
+      <${Sidebar}
+        selectedColor=${selectedColor}
+        selectedShape=${selectedShape}
+        onColor=${handleColor}
+        onShape=${handleShape}
+        images=${images}
+        isGenerating=${isGenerating}
+        sessionActive=${sessionActive}
+        flowStep=${flowStep}
+        onImageClick=${handleImageClick}
+      />
+      <${CanvasArea}
+        fabricRef=${fabricRef}
+        isGenerating=${isGenerating}
+        awaitingGesture=${awaitingGesture}
+      />
+      <${OrbPanel} orbState=${orbState} transcript=${transcript} />
+      <${Footer} sessionActive=${sessionActive} status=${status} onStart=${startSession} onStop=${initiateClose} />
+    </div>
+    ${closing && html`
+      <${CloseOverlay}
+        message=${CLOSE_MSGS[Math.floor(Math.random() * CLOSE_MSGS.length)]}
+        onSave=${saveAndEnd}
+        onEnd=${endSession}
+      />
+    `}
+    <video ref=${videoRef} style=${{ display: 'none' }} muted playsinline />
+    <canvas ref=${motionCanRef} style=${{ display: 'none' }} />
+  `;
 }
 
-function saveAndEnd() {
-  saveCanvas();
-  setTimeout(() => { endSession(); closeOverlay.classList.remove('visible'); }, 600);
-}
-
-function endWithoutSaving() { endSession(); closeOverlay.classList.remove('visible'); }
-
-function endSession() {
-  if (processor)      { processor.disconnect(); processor = null; }
-  if (mediaStream)    { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
-  if (canvasInterval) { clearInterval(canvasInterval); canvasInterval = null; }
-  if (ws)             { ws.close(); ws = null; }
-  if (audioCtx)       { audioCtx.close(); audioCtx = null; }
-  ambient.pause(); ambient.currentTime = 0;
-  playbackQueue = []; isPlaying = false; sessionActive = false;
-  startBtn.disabled = false; stopBtn.disabled = true;
-  closeBtn.classList.remove('visible');
-  setOrbState('idle');
-  setStatus('session ended — click start to begin again');
-  transcriptEl.textContent = '';
-  motionLines = []; prevFrameData = null;
-  // Clear color/shape selection state
-  document.querySelectorAll('.color-swatch, .shape-btn').forEach(el => el.classList.remove('selected'));
-}
-
-// ── Init ───────────────────────────────────────────────────────────────────
-window.addEventListener('load', () => {
-  buildColorGrid();
-  buildShapeGrid();
-  initCanvas();
-  initMotionCanvas();
-  setStatus('click start to meet Mix');
-});
-
-window.addEventListener('resize', () => {
-  if (!fabricCanvas) return;
-  const container = document.getElementById('canvas-container');
-  fabricCanvas.setWidth(container.clientWidth);
-  fabricCanvas.setHeight(container.clientHeight);
-  fabricCanvas.renderAll();
-  initMotionCanvas();
-});
+// ── Mount ──────────────────────────────────────────────────────────────────
+ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
 </script>
 </body>
 </html>

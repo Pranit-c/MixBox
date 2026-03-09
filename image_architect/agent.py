@@ -12,8 +12,7 @@ import os
 import base64
 import logging
 import random
-aspect_ratios = ["3:4", "4:3", "16:9", "9:16"]
-chosen_ratio  = random.choice(aspect_ratios)
+
 from google.adk.agents import LlmAgent
 from google.adk.tools import FunctionTool
 from google import genai
@@ -75,16 +74,16 @@ def generate_collage_image(
         "No text, no people, no faces."
     )
 
-    logger.info(f"Generating image: {full_prompt[:80]}…")
+    aspect_ratio = random.choice(["3:4", "4:3", "16:9", "9:16"])
+    logger.info(f"Generating image: {full_prompt[:80]}… [ratio={aspect_ratio}]")
 
     try:
         response = client.models.generate_images(
             model="imagen-3.0-generate-002",
             prompt=full_prompt,
-            
             config=genai_types.GenerateImagesConfig(
                 number_of_images=1,
-                aspect_ratio=chosen_ratio,
+                aspect_ratio=aspect_ratio,
                 safety_filter_level="block_few",
                 person_generation="dont_allow",
             ),
