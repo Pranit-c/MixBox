@@ -167,42 +167,51 @@
       animation: img-arrive 0.3s ease forwards;
     }
 
-    /* Webcam PiP — small preview in canvas corner during gesture window */
+    /* Webcam PiP — small preview in canvas corner, visible during session */
     .webcam-pip {
       position: absolute; top: 14px; right: 14px;
       width: 108px; height: 80px; border-radius: 10px;
       overflow: hidden; border: 1.5px solid var(--border);
       background: var(--surface2); z-index: 8;
-      opacity: 0; transition: opacity 0.5s ease;
-      box-shadow: 0 2px 12px rgba(61,53,48,0.15);
+      opacity: 0; transition: opacity 0.6s ease;
+      box-shadow: 0 2px 12px rgba(61,53,48,0.12);
     }
     .webcam-pip.visible { opacity: 1; }
     .webcam-pip video {
       width: 100%; height: 100%; object-fit: cover;
-      transform: scaleX(-1); /* mirror so it feels natural */
+      transform: scaleX(-1);
     }
     .webcam-label {
       position: absolute; bottom: 5px; left: 50%;
       transform: translateX(-50%);
-      font-size: 0.48rem; letter-spacing: 0.1em;
-      color: var(--text-muted); white-space: nowrap;
+      font-size: 0.46rem; letter-spacing: 0.1em;
+      color: rgba(255,255,255,0.7); white-space: nowrap;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
 
-    /* Gesture prompt — appears in canvas when awaiting gesture */
-    .gesture-prompt {
-      position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%);
-      background: var(--surface); border: 1px solid var(--earth-light);
-      border-radius: 20px; padding: 8px 20px;
-      font-size: 0.62rem; color: var(--earth); letter-spacing: 0.12em;
-      z-index: 10; display: flex; align-items: center; gap: 8px;
-      box-shadow: 0 2px 16px rgba(124,92,191,0.18);
-      animation: img-arrive 0.4s ease forwards;
-      white-space: nowrap;
+    /* Beacon — guiding light that follows user's movement on the canvas */
+    .beacon {
+      position: absolute;
+      width: 56px; height: 56px;
+      margin-left: -28px; margin-top: -28px;
+      border-radius: 50%;
+      background: radial-gradient(circle,
+        rgba(245,210,110,0.82) 0%,
+        rgba(210,155,60,0.38) 52%,
+        transparent 82%);
+      box-shadow:
+        0 0 24px rgba(245,210,110,0.45),
+        0 0 52px rgba(210,155,60,0.18);
+      pointer-events: none;
+      z-index: 7;
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      animation: beaconPulse 3.4s ease-in-out infinite;
     }
-    .gesture-dot {
-      width: 7px; height: 7px; border-radius: 50%;
-      background: var(--clay); flex-shrink: 0;
-      animation: blink 0.8s ease-in-out infinite alternate;
+    .beacon.visible { opacity: 1; }
+    @keyframes beaconPulse {
+      0%, 100% { transform: scale(1);    box-shadow: 0 0 24px rgba(245,210,110,0.45), 0 0 52px rgba(210,155,60,0.18); }
+      50%       { transform: scale(1.22); box-shadow: 0 0 36px rgba(245,210,110,0.6),  0 0 70px rgba(210,155,60,0.28); }
     }
 
     /* Orb panel */
@@ -421,7 +430,7 @@ function PaletteImage({ src, onClick }) {
 
 function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGenerating, sessionActive, flowStep, onImageClick }) {
   // Disabled states based on flow step
-  const generating = flowStep === 'generating_gesture';
+  const generating = flowStep === 'generating';
   const colorDisabled  = !sessionActive || generating;
   const shapeDisabled  = !sessionActive || !selectedColor || generating;
   const shapeReady     = sessionActive && !!selectedColor && flowStep === 'color_picked';
@@ -429,11 +438,11 @@ function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGen
   // Section header labels guide the user through the ritual
   const colorLabel = !sessionActive
     ? 'choose a color'
-    : flowStep === 'idle' ? 'start — choose a color' : 'color';
+    : flowStep === 'idle' ? 'choose a color' : 'color';
   const shapeLabel = shapeReady
-    ? 'now — pick a shape'
-    : flowStep === 'awaiting_gesture' || flowStep === 'generating_gesture'
-      ? 'shape'
+    ? 'now — a shape'
+    : generating
+      ? 'creating\u2026'
       : 'then a shape';
 
   return html`
@@ -467,7 +476,7 @@ function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGen
   `;
 }
 
-function CanvasArea({ fabricRef, isGenerating, awaitingGesture, pipVideoRef, hasVideo }) {
+function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo, beaconElRef }) {
   const containerRef = useRef(null);
   const canvasElRef = useRef(null);
 
@@ -501,9 +510,11 @@ function CanvasArea({ fabricRef, isGenerating, awaitingGesture, pipVideoRef, has
     return () => { window.removeEventListener('resize', onResize); fc.dispose(); };
   }, []);
 
-  const remove = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { fc.remove(o); fc.renderAll(); } };
-  const clear  = () => { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#f9f5ef'; fc.renderAll(); };
-  const save   = () => {
+  const remove  = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { fc.remove(o); fc.renderAll(); } };
+  const clear   = () => { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#f9f5ef'; fc.renderAll(); };
+  const rotateL = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle || 0) - 15); fc.renderAll(); } };
+  const rotateR = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle || 0) + 15); fc.renderAll(); } };
+  const save    = () => {
     const fc = fabricRef.current; if (!fc) return;
     const a = document.createElement('a');
     a.href = fc.toDataURL({ format: 'png', quality: 1 });
@@ -515,21 +526,23 @@ function CanvasArea({ fabricRef, isGenerating, awaitingGesture, pipVideoRef, has
     <main className="cv" ref=${containerRef}>
       <canvas ref=${canvasElRef} />
       <div className="cv-toolbar">
+        <button className="cv-btn" onClick=${rotateL} title="rotate left">↺</button>
+        <button className="cv-btn" onClick=${rotateR} title="rotate right">↻</button>
         <button className="cv-btn" onClick=${remove}>remove</button>
         <button className="cv-btn" onClick=${clear}>clear</button>
         <button className="cv-btn" onClick=${save}>save png</button>
       </div>
       ${isGenerating && html`<div className="gen-badge">creating your image\u2026</div>`}
-      ${awaitingGesture && html`
-        <div className="gesture-prompt">
-          <span className="gesture-dot" />
-          move \u00b7 speak \u00b7 or both
-        </div>
+      ${html`
+        <div className=${['beacon', hasVideo && 'visible'].filter(Boolean).join(' ')}
+             ref=${beaconElRef}
+             style=${{ left: '50%', top: '50%' }}
+        />
       `}
       ${hasVideo && html`
-        <div className=${['webcam-pip', awaitingGesture && 'visible'].filter(Boolean).join(' ')}>
+        <div className=${['webcam-pip', 'visible'].join(' ')}>
           <video ref=${pipVideoRef} muted playsinline autoplay />
-          <div className="webcam-label">mix is watching</div>
+          <div className="webcam-label">mix is here</div>
         </div>
       `}
     </main>
@@ -636,7 +649,7 @@ function App() {
   const [isGenerating,  setIsGenerating]  = useState(false);
   const [closing,       setClosing]       = useState(false);
 
-  // flowStep: 'idle' | 'color_picked' | 'awaiting_gesture' | 'generating_gesture'
+  // flowStep: 'idle' | 'color_picked' | 'generating'
   const [flowStep, setFlowStep] = useState('idle');
   const [hasVideo, setHasVideo] = useState(false);   // tracks camera grant → triggers re-render
 
@@ -646,104 +659,83 @@ function App() {
   const processorRef     = useRef(null);
   const canvasIntervalRef = useRef(null);
 
-  // Video / motion detection refs
-  const videoRef      = useRef(null);   // hidden video for motion detection
-  const pipVideoRef   = useRef(null);   // visible PiP in canvas area
-  const motionCanRef  = useRef(null);   // hidden canvas for pixel diff
-  const motionRef     = useRef(null);   // { active, intervalId, timeoutId }
-  const hasVideoRef   = useRef(false);  // used inside callbacks (ref avoids stale closure)
+  // Video + beacon refs
+  const videoRef         = useRef(null);   // hidden video for motion centroid
+  const pipVideoRef      = useRef(null);   // visible PiP
+  const motionCanRef     = useRef(null);   // hidden canvas for pixel diff
+  const beaconElRef      = useRef(null);   // the beacon DOM element (direct style updates)
+  const beaconSmoothed   = useRef({ x: 0.5, y: 0.5 }); // smoothed 0-1 position
+  const beaconTrackRef   = useRef(null);   // interval ID for beacon tracking
+  const hasVideoRef      = useRef(false);  // used inside callbacks
 
   // Wire up orb state setter for audio module
   _orbStateSetter = setOrbState;
 
-  // ── Motion detection ───────────────────────────────────────────────────
+  // ── Beacon tracking — follows motion centroid in webcam frame ──────────
 
-  function stopMotionDetection() {
-    const r = motionRef.current;
-    if (!r) return;
-    r.active = false;
-    if (r.intervalId) clearInterval(r.intervalId);
-    if (r.timeoutId)  clearTimeout(r.timeoutId);
-    motionRef.current = null;
-  }
-
-  function fireGesture(intensity) {
-    stopMotionDetection();
-    setFlowStep('generating_gesture');
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: 'gesture', intensity }));
+  function updateBeaconPos(targetX, targetY) {
+    const s = beaconSmoothed.current;
+    s.x += (targetX - s.x) * 0.10;  // gentle lerp — floats, not jumps
+    s.y += (targetY - s.y) * 0.10;
+    const el = beaconElRef.current;
+    if (el) {
+      el.style.left = (s.x * 100) + '%';
+      el.style.top  = (s.y * 100) + '%';
     }
   }
 
-  function startMotionDetection() {
-    stopMotionDetection(); // clear any previous run
+  function stopBeaconTracking() {
+    if (beaconTrackRef.current) {
+      clearInterval(beaconTrackRef.current);
+      beaconTrackRef.current = null;
+    }
+  }
 
+  function startBeaconTracking() {
+    stopBeaconTracking();
     const video  = videoRef.current;
     const canvas = motionCanRef.current;
-
-    if (!video || !canvas || !hasVideoRef.current) {
-      // No camera — give the user 10 seconds to speak, then fire gently
-      const tid = setTimeout(() => fireGesture('gentle'), 10000);
-      motionRef.current = { active: false, intervalId: null, timeoutId: tid };
-      return;
-    }
+    if (!video || !canvas) return;
 
     const ctx = canvas.getContext('2d');
-    canvas.width  = 160;
-    canvas.height = 120;
-    let prevData   = null;
-    let motionCount = 0;
+    canvas.width  = 80;
+    canvas.height = 60;
+    let prevData = null;
 
     function detect() {
-      if (!motionRef.current || !motionRef.current.active) return;
       try {
-        ctx.drawImage(video, 0, 0, 160, 120);
-        const curr = ctx.getImageData(0, 0, 160, 120).data;
+        ctx.drawImage(video, 0, 0, 80, 60);
+        const curr = ctx.getImageData(0, 0, 80, 60).data;
         if (prevData) {
-          let diff = 0;
-          for (let i = 0; i < curr.length; i += 4) {
-            diff += Math.abs(curr[i]   - prevData[i])
-                  + Math.abs(curr[i+1] - prevData[i+1])
-                  + Math.abs(curr[i+2] - prevData[i+2]);
-          }
-          // Average per-pixel diff (0–255 scale)
-          const avgDiff = diff / (160 * 120 * 3);
-          if (avgDiff > 12) {
-            motionCount++;
-            if (motionCount >= 2) {
-              // Gesture confirmed — classify intensity
-              const intensity = avgDiff > 35 ? 'strong' : avgDiff > 20 ? 'medium' : 'gentle';
-              fireGesture(intensity);
-              return;
+          let wx = 0, wy = 0, total = 0;
+          for (let y = 0; y < 60; y++) {
+            for (let x = 0; x < 80; x++) {
+              const i = (y * 80 + x) * 4;
+              const diff = Math.abs(curr[i]   - prevData[i])
+                         + Math.abs(curr[i+1] - prevData[i+1])
+                         + Math.abs(curr[i+2] - prevData[i+2]);
+              if (diff > 22) {
+                wx += x * diff;
+                wy += y * diff;
+                total += diff;
+              }
             }
+          }
+          if (total > 0) {
+            // Mirror x so beacon follows correctly (webcam is front-facing, mirrored in PiP)
+            const rawX = 1 - (wx / total) / 80;
+            const rawY = (wy / total) / 60;
+            updateBeaconPos(rawX, rawY);
           } else {
-            motionCount = 0;
+            // No motion — drift gently back toward center
+            updateBeaconPos(0.5, 0.5);
           }
         }
         prevData = new Uint8ClampedArray(curr);
-      } catch (_) {
-        // drawImage fails if video not yet playing; just skip frame
-      }
+      } catch (_) { /* video not ready yet — skip frame */ }
     }
 
-    // 1 second settle time — lets the user read the gesture prompt
-    const startTid = setTimeout(() => {
-      if (!motionRef.current) return;
-      motionRef.current.active = true;
-      const iid = setInterval(detect, 200); // 5 fps — reliable, low CPU
-      motionRef.current.intervalId = iid;
-
-      // 12-second fallback — fire with 'gentle' even if no motion detected
-      // (user may have spoken without moving)
-      motionRef.current.timeoutId = setTimeout(() => {
-        if (motionRef.current && motionRef.current.active) {
-          fireGesture('gentle');
-        }
-      }, 12000);
-    }, 1000);
-
-    motionRef.current = { active: false, intervalId: null, timeoutId: startTid };
+    beaconTrackRef.current = setInterval(detect, 200); // 5 fps
   }
 
   // ── Canvas action handlers ─────────────────────────────────────────────
@@ -762,14 +754,13 @@ function App() {
 
   const handleShape = useCallback((s) => {
     setSelectedShape(s.name);
-    setFlowStep('awaiting_gesture');
+    setFlowStep('generating');
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'canvas_action', action_type: 'shape', value: s.name,
       }));
     }
-    // Open the gesture window
-    startMotionDetection();
+    // Shape pick triggers image generation on the backend — no gesture needed
   }, []);
 
   const handleImageClick = useCallback((src) => {
@@ -802,7 +793,7 @@ function App() {
       }
     }
 
-    // Point both video elements at the media stream
+    // Point both video elements at the media stream + start beacon tracking
     if (hasVideoRef.current && videoRef.current) {
       videoRef.current.srcObject = mediaStreamRef.current;
       videoRef.current.play().catch(() => {});
@@ -810,6 +801,10 @@ function App() {
     if (hasVideoRef.current && pipVideoRef.current) {
       pipVideoRef.current.srcObject = mediaStreamRef.current;
       pipVideoRef.current.play().catch(() => {});
+    }
+    // Small delay so the video element is ready before we start reading frames
+    if (hasVideoRef.current) {
+      setTimeout(startBeaconTracking, 1200);
     }
 
     setStatus('connecting to Mix\u2026');
@@ -868,7 +863,7 @@ function App() {
 
         if (msg.type === 'generated_image') {
           setIsGenerating(false);
-          // Reset ritual — user starts fresh with a new color
+          // Ritual complete — reset so user can start again or just reflect
           setFlowStep('idle');
           setSelectedColor(null);
           setSelectedShape(null);
@@ -903,7 +898,7 @@ function App() {
 
   // ── End session ────────────────────────────────────────────────────────
   const endSession = useCallback(() => {
-    stopMotionDetection();
+    stopBeaconTracking();
     if (processorRef.current)    { processorRef.current.disconnect(); processorRef.current = null; }
     if (mediaStreamRef.current)  { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
     if (canvasIntervalRef.current) { clearInterval(canvasIntervalRef.current); canvasIntervalRef.current = null; }
@@ -940,8 +935,6 @@ function App() {
     setTimeout(endSession, 500);
   }, [endSession]);
 
-  const awaitingGesture = flowStep === 'awaiting_gesture';
-
   return html`
     <div className="app-grid">
       <${Header} status=${status} orbState=${orbState} />
@@ -959,9 +952,9 @@ function App() {
       <${CanvasArea}
         fabricRef=${fabricRef}
         isGenerating=${isGenerating}
-        awaitingGesture=${awaitingGesture}
         pipVideoRef=${pipVideoRef}
         hasVideo=${hasVideo}
+        beaconElRef=${beaconElRef}
       />
       <${OrbPanel} orbState=${orbState} transcript=${transcript} />
       <${Footer} sessionActive=${sessionActive} status=${status} onStart=${startSession} onStop=${initiateClose} />

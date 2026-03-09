@@ -6,15 +6,14 @@ FastAPI + WebSocket server using ADK bidi-streaming pattern.
 
 ARCHITECTURE:
 - Mix handles voice + canvas observation via Gemini Live bidi-streaming
-- User completes a three-step creative ritual: color → shape → gesture/voice
-- Gesture message triggers image generation combining all three inputs
-- Mix holds the space between steps with warm, brief guidance
+- User moves through a gentle ritual: breath check-in → color → shape → image → reflection
+- Shape pick auto-triggers image generation (no gesture needed)
+- Mix holds the space between steps with warm, unhurried guidance
 
 Message types from browser:
   bytes                → raw PCM audio (16kHz, 16-bit)
   { type: "image" }   → JPEG canvas frame (every 2s)
   { type: "canvas_action", action_type, value } → color or shape pick
-  { type: "gesture", intensity }                → motion detected after shape pick
   { type: "session_close" }                     → user ending session
   { type: "ping" }                              → keepalive no-op
 
@@ -115,12 +114,12 @@ async def websocket_endpoint(ws: WebSocket):
     live_request_queue = LiveRequestQueue()
     session_alive = {"value": True}
 
-    # ── Flow state — tracks the three-step creative ritual ────────────────────
-    # color → shape → gesture/voice → image
+    # ── Flow state — tracks the creative ritual ────────────────────────────────
+    # breath + check-in → color → shape → image → reflection
     flow_state = {
-        "color":            "",     # color name picked in step 1
-        "shape":            "",     # shape name picked in step 2
-        "voice_transcript": "",     # accumulated speech during gesture window
+        "color":            "",     # color name picked
+        "shape":            "",     # shape name picked
+        "voice_transcript": "",     # accumulated user speech (texture + anything said)
         "generating":       False,  # True while image is in-flight
     }
 
@@ -175,40 +174,90 @@ async def websocket_endpoint(ws: WebSocket):
                                 )
                             )
 
-                        # ── Step 1 or 2: color / shape picked ─────────────────
+                        # ── Color / shape picked ──────────────────────────────
                         elif msg_type == "canvas_action":
                             action_type  = data.get("action_type", "")
                             action_value = data.get("value", "")
                             logger.info(f"Canvas action: {action_type}={action_value}")
 
                             if action_type == "color":
-                                # Step 1 — store color, reset downstream state,
-                                # ask Mix to prompt user for a shape
+                                # Store color, reset downstream state
+                                # Mix will acknowledge + invite shape (guided by system prompt)
                                 flow_state["color"]            = action_value
                                 flow_state["shape"]            = ""
-                                flow_state["voice_transcript"] = ""
 
                                 hint = (
                                     f"[CANVAS ACTION: User selected color '{action_value}'. "
-                                    f"Acknowledge warmly with 2–5 words. "
-                                    f"Then say: 'Now — pick a shape to go with it.' "
+                                    f"Acknowledge with one soft observation — 3 to 6 words. "
+                                    f"Then gently ask: 'Is there a shape that wants to join that?' "
                                     f"Stop. Wait. Say nothing more.]"
                                 )
 
                             elif action_type == "shape":
-                                # Step 2 — store shape, reset voice window,
-                                # ask Mix to open the gesture/voice window
-                                flow_state["shape"]            = action_value
-                                flow_state["voice_transcript"] = ""
+                                # Store shape — auto-trigger image generation now
+                                flow_state["shape"] = action_value
                                 color = flow_state["color"]
+                                voice = flow_state["voice_transcript"]  # includes texture check-in
+
+                                logger.info(
+                                    f"Shape selected → generating: color={color!r}, "
+                                    f"shape={action_value!r}, voice={voice[:60]!r}"
+                                )
 
                                 hint = (
                                     f"[CANVAS ACTION: User selected shape '{action_value}' "
-                                    f"with color '{color}'. "
-                                    f"Acknowledge the combination briefly — one sentence. "
-                                    f"Then say: 'Now — move, speak, or both. I'm watching and listening.' "
-                                    f"Stop completely. The gesture window is open. Say nothing more.]"
+                                    f"with color '{color}'. Texture context from their words: '{voice}'. "
+                                    f"Notice the color and shape together in one warm, brief sentence. "
+                                    f"Then say: 'Let me make something from that.' "
+                                    f"Stop. Wait quietly until the image appears. Say nothing more.]"
                                 )
+
+                                # Auto-trigger image generation (guard against double-fire)
+                                if not flow_state["generating"]:
+                                    flow_state["generating"] = True
+
+                                    try:
+                                        await ws.send_text(json.dumps({
+                                            "type": "generating_canvas_image"
+                                        }))
+                                    except Exception:
+                                        pass
+
+                                    async def on_image_ready(img_b64: str):
+                                        flow_state["generating"] = False
+                                        try:
+                                            await ws.send_text(json.dumps({
+                                                "type":   "generated_image",
+                                                "data":   img_b64,
+                                                "source": "ritual",
+                                            }))
+                                            logger.info("Ritual image sent to browser.")
+                                        except Exception as e:
+                                            logger.warning(f"Could not send image: {e}")
+
+                                        # After image lands, invite reflection
+                                        try:
+                                            live_request_queue.send_content(
+                                                types.Content(parts=[types.Part(text=(
+                                                    "[IMAGE CREATED: The image has appeared on the canvas. "
+                                                    "After a quiet moment, gently ask: 'How does it feel to look at that?' "
+                                                    "Wait for their response. Then softly offer: "
+                                                    "'Would you like to sit with this... or is there something new that wants to come?' "
+                                                    "Wait. Do not rush.]"
+                                                ))])
+                                            )
+                                        except Exception:
+                                            pass
+
+                                    asyncio.create_task(
+                                        generate_gesture_image(
+                                            color=color,
+                                            shape=action_value,
+                                            gesture_intensity="medium",   # texture/voice carries the mood
+                                            voice_transcript=voice,
+                                            on_image_ready=on_image_ready,
+                                        )
+                                    )
 
                             else:
                                 hint = None
@@ -220,69 +269,6 @@ async def websocket_endpoint(ws: WebSocket):
                                     )
                                 except Exception as e:
                                     logger.warning(f"Canvas action hint failed: {e}")
-
-                        # ── Step 3: gesture received → generate image ──────────
-                        elif msg_type == "gesture":
-                            gesture_intensity = data.get("intensity", "medium")
-                            color = flow_state["color"]
-                            shape = flow_state["shape"]
-                            voice = flow_state["voice_transcript"]
-
-                            logger.info(
-                                f"Gesture: intensity={gesture_intensity}, "
-                                f"color={color!r}, shape={shape!r}, "
-                                f"voice={voice[:60]!r}"
-                            )
-
-                            # Tell Mix what was received so she can acknowledge
-                            hint = (
-                                f"[GESTURE: color='{color}', shape='{shape}', "
-                                f"motion='{gesture_intensity}', voice='{voice}'. "
-                                f"Acknowledge what you noticed — the motion, what they said, or both. "
-                                f"One sentence, warm and specific. "
-                                f"Then say exactly: 'Let me create something from that now.' "
-                                f"Wait quietly until the image arrives.]"
-                            )
-                            try:
-                                live_request_queue.send_content(
-                                    types.Content(parts=[types.Part(text=hint)])
-                                )
-                            except Exception as e:
-                                logger.warning(f"Gesture hint failed: {e}")
-
-                            # Generate image (guard against double-fire)
-                            if not flow_state["generating"]:
-                                flow_state["generating"] = True
-
-                                try:
-                                    await ws.send_text(json.dumps({
-                                        "type": "generating_canvas_image"
-                                    }))
-                                except Exception:
-                                    pass
-
-                                async def on_gesture_ready(img_b64: str):
-                                    flow_state["generating"]       = False
-                                    flow_state["voice_transcript"] = ""
-                                    try:
-                                        await ws.send_text(json.dumps({
-                                            "type":   "generated_image",
-                                            "data":   img_b64,
-                                            "source": "gesture",
-                                        }))
-                                        logger.info("Gesture image sent to browser.")
-                                    except Exception as e:
-                                        logger.warning(f"Could not send gesture image: {e}")
-
-                                asyncio.create_task(
-                                    generate_gesture_image(
-                                        color=color,
-                                        shape=shape,
-                                        gesture_intensity=gesture_intensity,
-                                        voice_transcript=voice,
-                                        on_image_ready=on_gesture_ready,
-                                    )
-                                )
 
                         # ── Session close ─────────────────────────────────────
                         elif msg_type == "session_close":
