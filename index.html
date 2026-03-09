@@ -167,6 +167,27 @@
       animation: img-arrive 0.3s ease forwards;
     }
 
+    /* Webcam PiP — small preview in canvas corner during gesture window */
+    .webcam-pip {
+      position: absolute; top: 14px; right: 14px;
+      width: 108px; height: 80px; border-radius: 10px;
+      overflow: hidden; border: 1.5px solid var(--border);
+      background: var(--surface2); z-index: 8;
+      opacity: 0; transition: opacity 0.5s ease;
+      box-shadow: 0 2px 12px rgba(61,53,48,0.15);
+    }
+    .webcam-pip.visible { opacity: 1; }
+    .webcam-pip video {
+      width: 100%; height: 100%; object-fit: cover;
+      transform: scaleX(-1); /* mirror so it feels natural */
+    }
+    .webcam-label {
+      position: absolute; bottom: 5px; left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.48rem; letter-spacing: 0.1em;
+      color: var(--text-muted); white-space: nowrap;
+    }
+
     /* Gesture prompt — appears in canvas when awaiting gesture */
     .gesture-prompt {
       position: absolute; bottom: 55px; left: 50%; transform: translateX(-50%);
@@ -446,7 +467,7 @@ function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGen
   `;
 }
 
-function CanvasArea({ fabricRef, isGenerating, awaitingGesture }) {
+function CanvasArea({ fabricRef, isGenerating, awaitingGesture, pipVideoRef, hasVideo }) {
   const containerRef = useRef(null);
   const canvasElRef = useRef(null);
 
@@ -505,6 +526,12 @@ function CanvasArea({ fabricRef, isGenerating, awaitingGesture }) {
           move \u00b7 speak \u00b7 or both
         </div>
       `}
+      ${hasVideo && html`
+        <div className=${['webcam-pip', awaitingGesture && 'visible'].filter(Boolean).join(' ')}>
+          <video ref=${pipVideoRef} muted playsinline autoplay />
+          <div className="webcam-label">mix is watching</div>
+        </div>
+      `}
     </main>
   `;
 }
@@ -552,14 +579,30 @@ function CloseOverlay({ message, onSave, onEnd }) {
 function addToFabric(fc, src, x, y) {
   if (!fc) return;
   fabric.Image.fromURL(src, (img) => {
-    const scale = Math.min(260 / img.width, 340 / img.height, 1);
+    const scale  = Math.min(260 / img.width, 340 / img.height, 1);
+    const angle  = (Math.random() - 0.5) * 28;          // ±14° — natural scatter
+    const border = 9 + Math.round(Math.random() * 7);   // 9–16px varied paper edge
+    const sOff   = 2 + Math.round(Math.random() * 5);   // random shadow offset
+
     img.set({
-      left: x != null ? x : fc.width / 2 - (img.width * scale) / 2 + (Math.random() - 0.5) * 50,
-      top:  y != null ? y : fc.height / 2 - (img.height * scale) / 2 + (Math.random() - 0.5) * 50,
+      left: x != null ? x : fc.width  / 2 - (img.width  * scale) / 2 + (Math.random() - 0.5) * 90,
+      top:  y != null ? y : fc.height / 2 - (img.height * scale) / 2 + (Math.random() - 0.5) * 90,
       scaleX: scale, scaleY: scale,
+      angle: angle,
       cornerStyle: 'circle', cornerColor: '#7c5cbf',
       cornerSize: 8, transparentCorners: false,
-      angle: (Math.random() - 0.5) * 8,
+      // Torn paper edge — cream border, varied width like a real print
+      stroke: '#f4ede0',
+      strokeWidth: border,
+      // Drop shadow — pieces feel like they're lying on a surface
+      shadow: new fabric.Shadow({
+        color: 'rgba(61,53,48,0.28)',
+        blur: 12 + Math.round(Math.random() * 8),
+        offsetX: sOff,
+        offsetY: sOff + 1,
+      }),
+      // Slight opacity variation — aged paper feel
+      opacity: 0.90 + Math.random() * 0.10,
     });
     fc.add(img);
     fc.setActiveObject(img);
@@ -589,9 +632,10 @@ function App() {
   const canvasIntervalRef = useRef(null);
 
   // Video / motion detection refs
-  const videoRef      = useRef(null);
-  const motionCanRef  = useRef(null);  // hidden canvas for pixel diff
-  const motionRef     = useRef(null);  // { active, intervalId, timeoutId }
+  const videoRef      = useRef(null);   // hidden video for motion detection
+  const pipVideoRef   = useRef(null);   // visible PiP in canvas area
+  const motionCanRef  = useRef(null);   // hidden canvas for pixel diff
+  const motionRef     = useRef(null);   // { active, intervalId, timeoutId }
   const hasVideoRef   = useRef(false);
 
   // Wire up orb state setter for audio module
@@ -741,10 +785,14 @@ function App() {
       }
     }
 
-    // Point the hidden video element at the media stream
+    // Point both video elements at the media stream
     if (hasVideoRef.current && videoRef.current) {
       videoRef.current.srcObject = mediaStreamRef.current;
       videoRef.current.play().catch(() => {});
+    }
+    if (hasVideoRef.current && pipVideoRef.current) {
+      pipVideoRef.current.srcObject = mediaStreamRef.current;
+      pipVideoRef.current.play().catch(() => {});
     }
 
     setStatus('connecting to Mix\u2026');
@@ -845,6 +893,7 @@ function App() {
     if (wsRef.current)           { wsRef.current.close(); wsRef.current = null; }
     if (_audioCtx)               { _audioCtx.close(); _audioCtx = null; }
     if (videoRef.current)        { videoRef.current.srcObject = null; }
+    if (pipVideoRef.current)     { pipVideoRef.current.srcObject = null; }
     const amb = document.getElementById('ambient');
     amb.pause(); amb.currentTime = 0;
     _playbackQueue = []; _isPlaying = false;
@@ -893,6 +942,8 @@ function App() {
         fabricRef=${fabricRef}
         isGenerating=${isGenerating}
         awaitingGesture=${awaitingGesture}
+        pipVideoRef=${pipVideoRef}
+        hasVideo=${hasVideoRef.current}
       />
       <${OrbPanel} orbState=${orbState} transcript=${transcript} />
       <${Footer} sessionActive=${sessionActive} status=${status} onStart=${startSession} onStop=${initiateClose} />
