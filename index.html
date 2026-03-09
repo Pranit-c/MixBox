@@ -79,6 +79,7 @@
     .color-swatch.sel { border-color: var(--earth); transform: scale(1.1); box-shadow: 0 0 14px rgba(124,92,191,0.45); }
     .color-swatch.white-ring { border-color: var(--border); }
     .color-swatch.dimmed { opacity: 0.35; pointer-events: none; }
+    .color-swatch.unselected { opacity: 0.18; transform: scale(0.88); }
 
     /* Shapes */
     .shape-grid { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 14px 10px; flex-shrink: 0; }
@@ -91,6 +92,7 @@
     .shape-btn:hover { border-color: var(--earth-light); transform: scale(1.06); color: var(--earth); }
     .shape-btn.sel { border-color: var(--earth); background: rgba(124,92,191,0.08); color: var(--earth); box-shadow: 0 0 10px rgba(124,92,191,0.22); }
     .shape-btn.dimmed { opacity: 0.3; pointer-events: none; }
+    .shape-btn.unselected { opacity: 0.18; }
     .shape-btn.ready { border-color: var(--earth-light); background: rgba(124,92,191,0.05); }
 
     /* Step indicator */
@@ -388,6 +390,8 @@ function ColorPicker({ selected, onSelect, disabled }) {
             selected === c.name && 'sel',
             c.name === 'white' && !selected && 'white-ring',
             disabled && 'dimmed',
+            // Dim others when a selection exists (user can still click to change)
+            !disabled && selected && selected !== c.name && 'unselected',
           ].filter(Boolean).join(' ')}
           style=${{ backgroundColor: c.hex }}
           title=${c.name}
@@ -409,6 +413,8 @@ function ShapePicker({ selected, onSelect, disabled, ready }) {
             selected === s.name && 'sel',
             disabled && 'dimmed',
             !disabled && ready && !selected && 'ready',
+            // Dim others when a selection exists
+            !disabled && selected && selected !== s.name && 'unselected',
           ].filter(Boolean).join(' ')}
           title=${s.name}
           onClick=${() => !disabled && onSelect(s)}
@@ -741,7 +747,6 @@ function App() {
   // ── Canvas action handlers ─────────────────────────────────────────────
   const handleColor = useCallback((c) => {
     // Re-picking a color resets the ritual
-    stopMotionDetection();
     setSelectedColor(c.name);
     setSelectedShape(null);
     setFlowStep('color_picked');
@@ -859,6 +864,17 @@ function App() {
 
         if (msg.transcript) {
           setTranscript(msg.transcript);
+        }
+
+        // ── Voice selected a color or shape ────────────────────────────
+        if (msg.type === 'voice_select') {
+          if (msg.kind === 'color') {
+            const color = COLORS.find(c => c.name === msg.value);
+            if (color) handleColor(color);
+          } else if (msg.kind === 'shape') {
+            const shape = SHAPES.find(s => s.name === msg.value);
+            if (shape) handleShape(shape);
+          }
         }
 
         if (msg.type === 'generated_image') {

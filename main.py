@@ -42,6 +42,15 @@ from google.genai import types
 from mix_agent.agent import root_agent
 from image_architect.client import generate_gesture_image
 
+# ── Voice keyword maps for auto-selecting color / shape ───────────────────────
+VOICE_COLORS = {
+    'blue': '#4a7fa5', 'teal': '#3d8c8c', 'green': '#4a7c59',
+    'yellow': '#dbb84a', 'orange': '#d4783c', 'red': '#c24a3c',
+    'pink': '#cc7a90', 'purple': '#7c5cbf', 'brown': '#7c5a3c',
+    'black': '#2a2520', 'white': '#f5f0e8', 'gold': '#c9a840',
+}
+VOICE_SHAPES = {'circle', 'square', 'triangle', 'star', 'spiral', 'wave', 'cloud'}
+
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -331,9 +340,7 @@ async def websocket_endpoint(ws: WebSocket):
                     transcript = event.output_audio_transcription
                     await ws.send_text(json.dumps({"transcript": transcript}))
 
-                # ── User speech → accumulate for gesture context ───────────────
-                # Voice compounds naturally with the gesture when it fires.
-                # Keeps last 300 chars so the prompt stays focused.
+                # ── User speech → accumulate + detect color/shape keywords ────────
                 if (
                     hasattr(event, "input_audio_transcription")
                     and event.input_audio_transcription
@@ -342,7 +349,102 @@ async def websocket_endpoint(ws: WebSocket):
                     logger.info(f"User said: {user_text}")
                     flow_state["voice_transcript"] = (
                         flow_state["voice_transcript"] + " " + user_text
-                    ).strip()[-300:]
+                    ).strip()[-400:]
+
+                    # Tokenise — strip punctuation, lowercase
+                    words = [
+                        w.strip(".,!?\"'—-").lower()
+                        for w in user_text.split()
+                    ]
+
+                    # ── Auto-select color if user speaks one ──────────────────
+                    if not flow_state["color"] and not flow_state["generating"]:
+                        for word in words:
+                            if word in VOICE_COLORS:
+                                flow_state["color"] = word
+                                logger.info(f"Voice color detected: {word}")
+                                try:
+                                    await ws.send_text(json.dumps({
+                                        "type": "voice_select",
+                                        "kind": "color",
+                                        "value": word,
+                                    }))
+                                    live_request_queue.send_content(
+                                        types.Content(parts=[types.Part(text=(
+                                            f"[VOICE: User chose the color '{word}' by speaking. "
+                                            f"Acknowledge with 2–4 words only. Stop.]"
+                                        ))])
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"Voice color select error: {e}")
+                                break
+
+                    # ── Auto-select shape if color is set and user speaks one ─
+                    elif (
+                        flow_state["color"]
+                        and not flow_state["shape"]
+                        and not flow_state["generating"]
+                    ):
+                        for word in words:
+                            if word in VOICE_SHAPES:
+                                flow_state["shape"] = word
+                                flow_state["generating"] = True
+                                logger.info(f"Voice shape detected: {word}")
+                                try:
+                                    await ws.send_text(json.dumps({
+                                        "type": "voice_select",
+                                        "kind": "shape",
+                                        "value": word,
+                                    }))
+                                    await ws.send_text(json.dumps({
+                                        "type": "generating_canvas_image"
+                                    }))
+                                    live_request_queue.send_content(
+                                        types.Content(parts=[types.Part(text=(
+                                            f"[VOICE: User chose shape '{word}' with color "
+                                            f"'{flow_state['color']}'. "
+                                            f"Say exactly: 'Let me make something from that.' "
+                                            f"Then silence. Wait.]"
+                                        ))])
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"Voice shape select error: {e}")
+
+                                color_val = flow_state["color"]
+                                voice_val  = flow_state["voice_transcript"]
+
+                                async def on_voice_image_ready(img_b64: str):
+                                    flow_state["generating"] = False
+                                    try:
+                                        await ws.send_text(json.dumps({
+                                            "type":   "generated_image",
+                                            "data":   img_b64,
+                                            "source": "ritual",
+                                        }))
+                                        logger.info("Voice-selected image sent.")
+                                    except Exception as e:
+                                        logger.warning(f"Could not send voice image: {e}")
+                                    try:
+                                        live_request_queue.send_content(
+                                            types.Content(parts=[types.Part(text=(
+                                                "[IMAGE CREATED: Image is on the canvas. "
+                                                "After a quiet moment, say: 'How does it feel to look at that?' "
+                                                "Then wait. Do not rush.]"
+                                            ))])
+                                        )
+                                    except Exception:
+                                        pass
+
+                                asyncio.create_task(
+                                    generate_gesture_image(
+                                        color=color_val,
+                                        shape=word,
+                                        gesture_intensity="medium",
+                                        voice_transcript=voice_val,
+                                        on_image_ready=on_voice_image_ready,
+                                    )
+                                )
+                                break
 
         except Exception as e:
             logger.error(f"Downstream error: {e}")
