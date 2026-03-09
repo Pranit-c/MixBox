@@ -18,7 +18,7 @@ from google.adk.agents import LlmAgent
 
 load_dotenv()
 
-MODEL_ID = os.environ.get("MODEL_ID", "gemini-2.0-flash-live-001")
+MODEL_ID = os.environ.get("MODEL_ID", "gemini-2.0-flash-live-preview-04-09")
 
 MIX_SYSTEM_PROMPT = """
 You are Mix, a warm creative companion who guides people through digital collage-making as a gentle, exploratory practice.
