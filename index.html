@@ -578,36 +578,50 @@ function CloseOverlay({ message, onSave, onEnd }) {
 // ── Fabric helper ──────────────────────────────────────────────────────────
 function addToFabric(fc, src, x, y) {
   if (!fc) return;
+  // Only set crossOrigin for real http(s) URLs, not data: URIs
+  const opts = src.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
+
   fabric.Image.fromURL(src, (img) => {
-    const scale  = Math.min(260 / img.width, 340 / img.height, 1);
-    const angle  = (Math.random() - 0.5) * 28;          // ±14° — natural scatter
-    const border = 9 + Math.round(Math.random() * 7);   // 9–16px varied paper edge
-    const sOff   = 2 + Math.round(Math.random() * 5);   // random shadow offset
+    if (!img || !img.width) return;
+
+    const scale  = Math.min(240 / img.width, 300 / img.height, 1);
+    const angle  = (Math.random() - 0.5) * 30;           // ±15° — natural scatter
+    const border = 14 + Math.round(Math.random() * 8);   // 14–22px thick cream border
+    const sBlur  = 18 + Math.round(Math.random() * 10);  // 18–28px soft shadow
+    const sOff   = 4 + Math.round(Math.random() * 6);    // 4–10px shadow offset
+
+    const cx = x != null ? x : fc.width  / 2 + (Math.random() - 0.5) * 120;
+    const cy = y != null ? y : fc.height / 2 + (Math.random() - 0.5) * 100;
 
     img.set({
-      left: x != null ? x : fc.width  / 2 - (img.width  * scale) / 2 + (Math.random() - 0.5) * 90,
-      top:  y != null ? y : fc.height / 2 - (img.height * scale) / 2 + (Math.random() - 0.5) * 90,
-      scaleX: scale, scaleY: scale,
-      angle: angle,
-      cornerStyle: 'circle', cornerColor: '#7c5cbf',
-      cornerSize: 8, transparentCorners: false,
-      // Torn paper edge — cream border, varied width like a real print
-      stroke: '#f4ede0',
+      left:   cx - (img.width  * scale) / 2,
+      top:    cy - (img.height * scale) / 2,
+      scaleX: scale,
+      scaleY: scale,
+      angle:  angle,
+      cornerStyle: 'circle',
+      cornerColor: '#7c5cbf',
+      cornerSize: 9,
+      transparentCorners: false,
+      // Thick cream/off-white border — torn print feel
+      stroke: '#ede5d5',
       strokeWidth: border,
-      // Drop shadow — pieces feel like they're lying on a surface
+      strokeLineJoin: 'round',
+      // Strong drop shadow — paper lying on a surface
       shadow: new fabric.Shadow({
-        color: 'rgba(61,53,48,0.28)',
-        blur: 12 + Math.round(Math.random() * 8),
+        color:   'rgba(40,30,20,0.35)',
+        blur:    sBlur,
         offsetX: sOff,
-        offsetY: sOff + 1,
+        offsetY: sOff + 2,
       }),
-      // Slight opacity variation — aged paper feel
-      opacity: 0.90 + Math.random() * 0.10,
+      // Slight opacity variation — aged, layered paper
+      opacity: 0.88 + Math.random() * 0.12,
     });
+
     fc.add(img);
     fc.setActiveObject(img);
     fc.renderAll();
-  }, { crossOrigin: 'anonymous' });
+  }, opts);
 }
 
 // ── App ────────────────────────────────────────────────────────────────────
@@ -624,6 +638,7 @@ function App() {
 
   // flowStep: 'idle' | 'color_picked' | 'awaiting_gesture' | 'generating_gesture'
   const [flowStep, setFlowStep] = useState('idle');
+  const [hasVideo, setHasVideo] = useState(false);   // tracks camera grant → triggers re-render
 
   const wsRef            = useRef(null);
   const fabricRef        = useRef(null);
@@ -636,7 +651,7 @@ function App() {
   const pipVideoRef   = useRef(null);   // visible PiP in canvas area
   const motionCanRef  = useRef(null);   // hidden canvas for pixel diff
   const motionRef     = useRef(null);   // { active, intervalId, timeoutId }
-  const hasVideoRef   = useRef(false);
+  const hasVideoRef   = useRef(false);  // used inside callbacks (ref avoids stale closure)
 
   // Wire up orb state setter for audio module
   _orbStateSetter = setOrbState;
@@ -773,12 +788,14 @@ function App() {
         video: { width: 320, height: 240, facingMode: 'user' },
       });
       hasVideoRef.current = true;
+      setHasVideo(true);
     } catch {
       try {
         mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
           audio: true, video: false,
         });
         hasVideoRef.current = false;
+        setHasVideo(false);
       } catch {
         setStatus('mic access denied');
         return;
@@ -898,6 +915,7 @@ function App() {
     amb.pause(); amb.currentTime = 0;
     _playbackQueue = []; _isPlaying = false;
     hasVideoRef.current = false;
+    setHasVideo(false);
     setSessionActive(false); setOrbState('idle');
     setStatus('session ended \u2014 click start to begin again');
     setTranscript(''); setSelectedColor(null); setSelectedShape(null);
@@ -943,7 +961,7 @@ function App() {
         isGenerating=${isGenerating}
         awaitingGesture=${awaitingGesture}
         pipVideoRef=${pipVideoRef}
-        hasVideo=${hasVideoRef.current}
+        hasVideo=${hasVideo}
       />
       <${OrbPanel} orbState=${orbState} transcript=${transcript} />
       <${Footer} sessionActive=${sessionActive} status=${status} onStart=${startSession} onStop=${initiateClose} />
