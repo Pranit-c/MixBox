@@ -85,7 +85,7 @@ run_config = RunConfig(
     speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Aoede"   # warm, natural female voice
+                voice_name="Kore"    # soft, warm, gentle female voice
             )
         )
     ),
@@ -197,9 +197,9 @@ async def websocket_endpoint(ws: WebSocket):
 
                                 hint = (
                                     f"[CANVAS ACTION: User selected color '{action_value}'. "
-                                    f"Acknowledge with one soft observation — 3 to 6 words. "
-                                    f"Then gently ask: 'Is there a shape that wants to join that?' "
-                                    f"Stop. Wait. Say nothing more.]"
+                                    f"Respond with one warm, gentle observation — 5 to 8 words. "
+                                    f"Do NOT ask about shapes. Do NOT ask any question. "
+                                    f"Just witness the color softly and go quiet.]"
                                 )
 
                             elif action_type == "shape":
