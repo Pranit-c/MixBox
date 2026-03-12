@@ -7,10 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-  <script src="https://unpkg.com/htm@3"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+  <!-- htm: must use /dist/htm.umd.js — the package root is ESM-only and won't define window.htm -->
+  <script src="https://cdn.jsdelivr.net/npm/htm@3/dist/htm.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/fabric@5.3.1/dist/fabric.min.js"></script>
   <!-- MediaPipe loaded lazily inside startGestureMode — NOT blocking page load -->
 
   <style>
@@ -372,8 +373,29 @@
 </head>
 
 <body>
+<!-- Visible fallback: shown until React mounts; also catches hard errors -->
+<div id="pre-render" style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#f5f0e8;font-family:'DM Mono',monospace;font-size:0.75rem;color:#7a6a5a;letter-spacing:0.06em;z-index:9999;">
+  loading MixBox…
+</div>
 <div id="root"></div>
 <audio id="ambient" src="/static/ambient.mp3" loop preload="auto"></audio>
+
+<script>
+// Show any unhandled JS errors visibly instead of a blank screen
+window.onerror = function(msg, src, line, col, err) {
+  var d = document.getElementById('pre-render');
+  if (d) {
+    d.style.flexDirection = 'column';
+    d.style.gap = '12px';
+    d.innerHTML =
+      '<div style="font-size:1rem;color:#c24a3c;">MixBox failed to load</div>' +
+      '<div style="max-width:500px;text-align:center;color:#7a6a5a;line-height:1.7;">' + msg + '</div>' +
+      '<div style="color:#a89880;font-size:0.65rem;">' + src + ':' + line + '</div>' +
+      '<div style="margin-top:8px;color:#7a6a5a;">Try a hard refresh (Cmd+Shift+R / Ctrl+Shift+R)</div>';
+  }
+  return false;
+};
+</script>
 
 <script>
 // ── React setup ─────────────────────────────────────────────────────────────
@@ -1315,7 +1337,23 @@ function App() {
 }
 
 // ── Mount ────────────────────────────────────────────────────────────────────
-ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+try {
+  ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
+  // React mounted — remove the loading overlay
+  var pre = document.getElementById('pre-render');
+  if (pre) pre.remove();
+} catch (e) {
+  var pre = document.getElementById('pre-render');
+  if (pre) {
+    pre.style.flexDirection = 'column';
+    pre.style.gap = '12px';
+    pre.innerHTML =
+      '<div style="font-size:1rem;color:#c24a3c;">React failed to mount</div>' +
+      '<div style="max-width:500px;text-align:center;color:#7a6a5a;line-height:1.7;">' + e.message + '</div>' +
+      '<div style="margin-top:8px;color:#7a6a5a;">Try a hard refresh (Cmd+Shift+R / Ctrl+Shift+R)</div>';
+  }
+  console.error('React mount failed:', e);
+}
 </script>
 </body>
 </html>
