@@ -545,8 +545,8 @@ function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo, beaconElRe
              style=${{ left: '50%', top: '50%' }}
         />
       `}
-      ${hasVideo && html`
-        <div className=${['webcam-pip', 'visible'].join(' ')}>
+      ${/* Always in DOM so pipVideoRef is never null when startSession sets srcObject */html`
+        <div className=${['webcam-pip', hasVideo && 'visible'].filter(Boolean).join(' ')}>
           <video ref=${pipVideoRef} muted playsinline autoplay />
           <div className="webcam-label">mix is here</div>
         </div>

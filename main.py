@@ -197,9 +197,12 @@ async def websocket_endpoint(ws: WebSocket):
 
                                 hint = (
                                     f"[CANVAS ACTION: User selected color '{action_value}'. "
-                                    f"Respond with one warm, gentle observation — 5 to 8 words. "
-                                    f"Do NOT ask about shapes. Do NOT ask any question. "
-                                    f"Just witness the color softly and go quiet.]"
+                                    f"First, acknowledge the color with a warm, soft observation — 4 to 6 words. "
+                                    f"Then, gently and naturally wonder aloud about a shape — not as a command, "
+                                    f"but as a soft question, like: "
+                                    f"'What shape wants to live with that?' or "
+                                    f"'Is there a shape that feels right to go with it?' "
+                                    f"Two sentences maximum. Then go quiet.]"
                                 )
 
                             elif action_type == "shape":
