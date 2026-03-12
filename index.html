@@ -11,6 +11,9 @@
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/htm@3"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
+  <!-- MediaPipe Hands for gesture recognition -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
 
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -79,34 +82,33 @@
     .color-swatch.sel { border-color: var(--earth); transform: scale(1.1); box-shadow: 0 0 14px rgba(124,92,191,0.45); }
     .color-swatch.white-ring { border-color: var(--border); }
     .color-swatch.dimmed { opacity: 0.35; pointer-events: none; }
-    .color-swatch.unselected { opacity: 0.18; transform: scale(0.88); }
+    .color-swatch.locked { opacity: 0.5; pointer-events: none; }
 
-    /* Shapes */
-    .shape-grid { display: flex; flex-wrap: wrap; gap: 5px; padding: 4px 14px 10px; flex-shrink: 0; }
-    .shape-btn {
-      width: 34px; height: 34px; border: 1px solid var(--border); border-radius: 8px;
-      background: var(--surface2); cursor: pointer; font-size: 1rem;
-      display: flex; align-items: center; justify-content: center;
-      transition: all var(--tr); color: var(--text-dim); user-select: none;
-    }
-    .shape-btn:hover { border-color: var(--earth-light); transform: scale(1.06); color: var(--earth); }
-    .shape-btn.sel { border-color: var(--earth); background: rgba(124,92,191,0.08); color: var(--earth); box-shadow: 0 0 10px rgba(124,92,191,0.22); }
-    .shape-btn.dimmed { opacity: 0.3; pointer-events: none; }
-    .shape-btn.unselected { opacity: 0.18; }
-    .shape-btn.ready { border-color: var(--earth-light); background: rgba(124,92,191,0.05); }
-
-    /* Step indicator */
-    .step-hint {
-      padding: 4px 14px 8px;
-      font-size: 0.56rem;
-      color: var(--earth);
-      letter-spacing: 0.1em;
-      font-style: italic;
-      opacity: 0;
-      transition: opacity 0.4s ease;
+    /* Gesture guidance in sidebar */
+    .gesture-guide {
+      padding: 8px 14px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
       flex-shrink: 0;
     }
-    .step-hint.visible { opacity: 1; }
+    .pose-pill {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 0.58rem;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      padding: 3px 0;
+    }
+    .pose-pill .icon { font-size: 0.9rem; width: 18px; text-align: center; }
+    .stamp-tally {
+      margin-top: 4px;
+      font-size: 0.55rem;
+      color: var(--earth);
+      letter-spacing: 0.12em;
+      font-style: italic;
+    }
 
     /* Palette */
     .palette-scroll { flex: 1; overflow-y: auto; padding: 4px 10px 10px; }
@@ -143,7 +145,7 @@
     }
     @keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
 
-    /* Canvas */
+    /* Canvas area */
     .cv { grid-area: cv; position: relative; background: var(--bg); overflow: hidden; }
     .cv canvas { display: block; }
     .cv-toolbar {
@@ -169,7 +171,7 @@
       animation: img-arrive 0.3s ease forwards;
     }
 
-    /* Webcam PiP — small preview in canvas corner, visible during session */
+    /* Webcam PiP — visible during collage mode */
     .webcam-pip {
       position: absolute; top: 14px; right: 14px;
       width: 108px; height: 80px; border-radius: 10px;
@@ -179,10 +181,7 @@
       box-shadow: 0 2px 12px rgba(61,53,48,0.12);
     }
     .webcam-pip.visible { opacity: 1; }
-    .webcam-pip video {
-      width: 100%; height: 100%; object-fit: cover;
-      transform: scaleX(-1);
-    }
+    .webcam-pip video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
     .webcam-label {
       position: absolute; bottom: 5px; left: 50%;
       transform: translateX(-50%);
@@ -191,30 +190,111 @@
       text-shadow: 0 1px 3px rgba(0,0,0,0.4);
     }
 
-    /* Beacon — guiding light that follows user's movement on the canvas */
-    .beacon {
+    /* ── Gesture Zone ────────────────────────────────────────────────────── */
+    .gesture-zone {
       position: absolute;
-      width: 56px; height: 56px;
-      margin-left: -28px; margin-top: -28px;
-      border-radius: 50%;
-      background: radial-gradient(circle,
-        rgba(245,210,110,0.82) 0%,
-        rgba(210,155,60,0.38) 52%,
-        transparent 82%);
-      box-shadow:
-        0 0 24px rgba(245,210,110,0.45),
-        0 0 52px rgba(210,155,60,0.18);
-      pointer-events: none;
-      z-index: 7;
-      opacity: 0;
-      transition: opacity 0.8s ease;
-      animation: beaconPulse 3.4s ease-in-out infinite;
+      inset: 0;
+      background: #f9f5ef;
+      overflow: hidden;
     }
-    .beacon.visible { opacity: 1; }
-    @keyframes beaconPulse {
-      0%, 100% { transform: scale(1);    box-shadow: 0 0 24px rgba(245,210,110,0.45), 0 0 52px rgba(210,155,60,0.18); }
-      50%       { transform: scale(1.22); box-shadow: 0 0 36px rgba(245,210,110,0.6),  0 0 70px rgba(210,155,60,0.28); }
+
+    /* The stamp canvas — fills the zone, marks accumulate here */
+    .stamp-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
     }
+
+    /* Hand PiP — webcam + skeleton, top-right corner */
+    .hand-pip-wrap {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 224px;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(160,130,220,0.35);
+      background: rgba(22, 16, 36, 0.82);
+      box-shadow: 0 4px 22px rgba(0,0,0,0.28);
+      z-index: 8;
+    }
+    .hand-pip-canvas { display: block; width: 224px; height: 168px; }
+    .pose-label {
+      padding: 5px 10px 7px;
+      font-size: 0.58rem;
+      letter-spacing: 0.1em;
+      color: rgba(200,178,255,0.88);
+      text-align: center;
+      font-family: 'DM Mono', monospace;
+      background: rgba(14,10,22,0.55);
+      min-height: 26px;
+    }
+
+    /* Gesture footer — done button + stamp count */
+    .gesture-footer {
+      position: absolute;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: rgba(245,240,232,0.92);
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      padding: 8px 22px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 2px 14px rgba(61,53,48,0.1);
+      z-index: 9;
+    }
+    .mark-count {
+      font-size: 0.6rem;
+      color: var(--earth);
+      letter-spacing: 0.1em;
+      min-width: 64px;
+      font-style: italic;
+    }
+    .done-btn {
+      padding: 7px 22px;
+      background: var(--earth);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+      transition: all var(--tr);
+    }
+    .done-btn:hover:not(:disabled) { background: var(--earth-light); box-shadow: 0 0 14px rgba(124,92,191,0.3); }
+    .done-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Hands-loading notice */
+    .hands-loading {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      background: rgba(249,245,239,0.92);
+      z-index: 20;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.1rem;
+      font-style: italic;
+      color: var(--text-muted);
+      letter-spacing: 0.05em;
+      animation: fadein 0.4s ease;
+    }
+    .hands-spinner {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid var(--border);
+      border-top-color: var(--earth);
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* Orb panel */
     .op { grid-area: op; border-left: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; align-items: center; padding: 22px 14px 14px; gap: 16px; }
@@ -284,7 +364,7 @@
     .close-secondary { padding: 10px 24px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: 8px; font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: 0.1em; cursor: pointer; }
     @keyframes fadein { from { opacity: 0 } to { opacity: 1 } }
 
-    /* Paper texture */
+    /* Paper texture overlay */
     body::after {
       content: ''; position: fixed; inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
@@ -298,11 +378,11 @@
 <audio id="ambient" src="/static/ambient.mp3" loop preload="auto"></audio>
 
 <script>
-// ── React setup ────────────────────────────────────────────────────────────
+// ── React setup ─────────────────────────────────────────────────────────────
 const { useState, useRef, useEffect, useCallback } = React;
 const html = htm.bind(React.createElement);
 
-// ── Data ───────────────────────────────────────────────────────────────────
+// ── Data ────────────────────────────────────────────────────────────────────
 const COLORS = [
   { name: 'blue',   hex: '#4a7fa5' }, { name: 'teal',   hex: '#3d8c8c' },
   { name: 'green',  hex: '#4a7c59' }, { name: 'yellow', hex: '#dbb84a' },
@@ -311,12 +391,15 @@ const COLORS = [
   { name: 'brown',  hex: '#7c5a3c' }, { name: 'black',  hex: '#2a2520' },
   { name: 'white',  hex: '#f5f0e8' }, { name: 'gold',   hex: '#c9a840' },
 ];
-const SHAPES = [
-  { name: 'circle', s: '\u25EF' }, { name: 'square', s: '\u25A1' },
-  { name: 'triangle', s: '\u25B3' }, { name: 'star', s: '\u2726' },
-  { name: 'spiral', s: '\u25CE' }, { name: 'wave', s: '\u223F' },
-  { name: 'cloud', s: '\u2601' },
-];
+
+const POSE_LABELS = {
+  open:  '✋ open palm  →  burst',
+  fist:  '✊ fist  →  circle',
+  point: '☝️ point  →  spike',
+  peace: '✌️ peace  →  branch',
+  pinch: '🤌 pinch  →  gem',
+};
+
 const CLOSE_MSGS = [
   "You showed up today and made something. That matters.",
   "What you made here belongs to you. Every choice was yours.",
@@ -324,7 +407,7 @@ const CLOSE_MSGS = [
   "You brought yourself to this canvas. You carry this with you.",
 ];
 
-// ── Audio helpers (module-level refs) ──────────────────────────────────────
+// ── Audio helpers ────────────────────────────────────────────────────────────
 let _audioCtx = null;
 let _playbackQueue = [];
 let _isPlaying = false;
@@ -338,18 +421,12 @@ function float32ToInt16(f32) {
   }
   return out;
 }
-
 function enqueueAudio(buffer) {
   _playbackQueue.push(buffer);
   if (!_isPlaying) drainQueue();
 }
-
 function drainQueue() {
-  if (!_playbackQueue.length || !_audioCtx) {
-    _isPlaying = false;
-    if (_orbStateSetter) _orbStateSetter('listening');
-    return;
-  }
+  if (!_playbackQueue.length || !_audioCtx) { _isPlaying = false; if (_orbStateSetter) _orbStateSetter('listening'); return; }
   _isPlaying = true;
   if (_orbStateSetter) _orbStateSetter('speaking');
   const int16 = new Int16Array(_playbackQueue.shift());
@@ -358,67 +435,162 @@ function drainQueue() {
   const buf = _audioCtx.createBuffer(1, f32.length, 24000);
   buf.copyToChannel(f32, 0);
   const src = _audioCtx.createBufferSource();
-  src.buffer = buf;
-  src.connect(_audioCtx.destination);
-  src.onended = drainQueue;
-  src.start();
+  src.buffer = buf; src.connect(_audioCtx.destination);
+  src.onended = drainQueue; src.start();
 }
 
-// ── Components ─────────────────────────────────────────────────────────────
+// ── Gesture: pose classification ─────────────────────────────────────────────
+function classifyPose(lm) {
+  if (!lm || lm.length < 21) return null;
+  // Finger extended: tip.y strictly above pip.y (y=0 is top of image)
+  const ext = {
+    index:  lm[8].y  < lm[6].y,
+    middle: lm[12].y < lm[10].y,
+    ring:   lm[16].y < lm[14].y,
+    pinky:  lm[20].y < lm[18].y,
+  };
+  // Pinch: thumb tip close to index tip
+  const pd = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y);
+  const isPinch = pd < 0.08;
+  const cnt = Object.values(ext).filter(Boolean).length;
+
+  if (isPinch && cnt <= 1) return 'pinch';
+  if (cnt >= 4)            return 'open';
+  if (cnt === 0)           return 'fist';
+  if (cnt === 1 && ext.index)  return 'point';
+  if (cnt === 2 && ext.index && ext.middle) return 'peace';
+  return null;
+}
+
+function palmCenter(lm) {
+  // Average of wrist + 4 metacarpals
+  const pts = [lm[0], lm[5], lm[9], lm[13], lm[17]];
+  return {
+    x: pts.reduce((s, p) => s + p.x, 0) / pts.length,
+    y: pts.reduce((s, p) => s + p.y, 0) / pts.length,
+  };
+}
+
+// ── Gesture: stamp drawing functions ─────────────────────────────────────────
+function drawStamp(ctx, pose, x, y, color) {
+  const size = 38 + Math.random() * 20;   // 38–58px, slight randomness
+  const alpha = 0.68 + Math.random() * 0.20;
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  switch (pose) {
+    case 'open': {                          // Starburst — open energy radiating out
+      const rays = 10;
+      const r1 = size, r2 = size * 0.36;
+      ctx.beginPath();
+      for (let i = 0; i < rays * 2; i++) {
+        const a = (i * Math.PI) / rays - Math.PI / 2;
+        const r = i % 2 === 0 ? r1 : r2;
+        const px = x + r * Math.cos(a), py = y + r * Math.sin(a);
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+      break;
+    }
+    case 'fist': {                          // Dense filled circle — held, contained
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.62, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner ring texture
+      ctx.globalAlpha *= 0.38;
+      ctx.beginPath();
+      ctx.arc(x, y, size * 0.28, 0, Math.PI * 2);
+      ctx.fillStyle = '#f9f5ef';
+      ctx.fill();
+      break;
+    }
+    case 'point': {                         // Upward spike — directed, focused
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y - size);
+      ctx.lineTo(x + size * 0.30, y + size * 0.42);
+      ctx.lineTo(x, y + size * 0.14);
+      ctx.lineTo(x - size * 0.30, y + size * 0.42);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'peace': {                         // Fork/branch — two paths diverging
+      ctx.strokeStyle = color;
+      ctx.lineWidth = Math.max(4, size * 0.15);
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      // Stem
+      ctx.beginPath();
+      ctx.moveTo(x, y + size * 0.62);
+      ctx.lineTo(x, y - size * 0.08);
+      ctx.stroke();
+      // Left arm
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * 0.08);
+      ctx.lineTo(x - size * 0.52, y - size * 0.78);
+      ctx.stroke();
+      // Right arm
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * 0.08);
+      ctx.lineTo(x + size * 0.52, y - size * 0.78);
+      ctx.stroke();
+      break;
+    }
+    case 'pinch': {                         // Diamond gem — delicate, intimate
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * 0.58);
+      ctx.lineTo(x + size * 0.42, y);
+      ctx.lineTo(x, y + size * 0.58);
+      ctx.lineTo(x - size * 0.42, y);
+      ctx.closePath();
+      ctx.fill();
+      // Highlight
+      ctx.globalAlpha *= 0.55;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(x, y - size * 0.42);
+      ctx.lineTo(x + size * 0.18, y - size * 0.08);
+      ctx.lineTo(x, y - size * 0.04);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+  }
+  ctx.restore();
+}
+
+// ── Components ────────────────────────────────────────────────────────────────
 
 function Header({ status, orbState }) {
   const dotCls = 'status-dot' + (orbState === 'listening' ? ' live' : orbState === 'speaking' ? ' speaking' : '');
   return html`
     <header className="hd">
       <div className="logo">Mix<span className="logo-accent">Box</span></div>
-      <div className="status-bar">
-        <div className=${dotCls} />
-        <span>${status}</span>
-      </div>
+      <div className="status-bar"><div className=${dotCls} /><span>${status}</span></div>
     </header>
   `;
 }
 
-function ColorPicker({ selected, onSelect, disabled }) {
+function ColorPicker({ selected, onSelect, disabled, locked }) {
   return html`
     <div className="color-grid">
       ${COLORS.map(c => html`
-        <div
-          key=${c.name}
-          className=${[
-            'color-swatch',
+        <div key=${c.name}
+          className=${['color-swatch',
             selected === c.name && 'sel',
             c.name === 'white' && !selected && 'white-ring',
             disabled && 'dimmed',
-            // Dim others when a selection exists (user can still click to change)
-            !disabled && selected && selected !== c.name && 'unselected',
+            locked && selected !== c.name && 'locked',
           ].filter(Boolean).join(' ')}
           style=${{ backgroundColor: c.hex }}
           title=${c.name}
-          onClick=${() => !disabled && onSelect(c)}
+          onClick=${() => !disabled && !locked && onSelect(c)}
         />
-      `)}
-    </div>
-  `;
-}
-
-function ShapePicker({ selected, onSelect, disabled, ready }) {
-  return html`
-    <div className="shape-grid">
-      ${SHAPES.map(s => html`
-        <button
-          key=${s.name}
-          className=${[
-            'shape-btn',
-            selected === s.name && 'sel',
-            disabled && 'dimmed',
-            !disabled && ready && !selected && 'ready',
-            // Dim others when a selection exists
-            !disabled && selected && selected !== s.name && 'unselected',
-          ].filter(Boolean).join(' ')}
-          title=${s.name}
-          onClick=${() => !disabled && onSelect(s)}
-        >${s.s}</button>
       `)}
     </div>
   `;
@@ -434,45 +606,46 @@ function PaletteImage({ src, onClick }) {
   `;
 }
 
-function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGenerating, sessionActive, flowStep, onImageClick }) {
-  // Disabled states based on flow step
-  const generating = flowStep === 'generating';
-  const colorDisabled  = !sessionActive || generating;
-  const shapeDisabled  = !sessionActive || !selectedColor || generating;
-  const shapeReady     = sessionActive && !!selectedColor && flowStep === 'color_picked';
+function Sidebar({ selectedColor, onColor, images, isGenerating, sessionActive, flowStep, stampCount, onImageClick }) {
+  const isGesturing = flowStep === 'gesturing';
+  const isGeneratingOrDone = flowStep === 'generating';
+  const colorDisabled = !sessionActive || isGeneratingOrDone;
+  const colorLocked   = isGesturing;   // can see but not re-pick during gesture
 
-  // Section header labels guide the user through the ritual
-  const colorLabel = !sessionActive
-    ? 'choose a color'
-    : flowStep === 'idle' ? 'choose a color' : 'color';
-  const shapeLabel = shapeReady
-    ? 'now — a shape'
-    : generating
-      ? 'creating\u2026'
-      : 'then a shape';
+  const colorLabel = !sessionActive ? 'choose a color'
+    : flowStep === 'idle' ? 'choose a color'
+    : 'color';
 
   return html`
     <aside className="sb">
-      <div className=${['section-hd', shapeReady || flowStep === 'idle' ? '' : 'active'].filter(Boolean).join(' ')}>
+      <div className=${['section-hd', flowStep !== 'idle' ? 'active' : ''].filter(Boolean).join(' ')}>
         ${colorLabel}
       </div>
-      <${ColorPicker} selected=${selectedColor} onSelect=${onColor} disabled=${colorDisabled} />
+      <${ColorPicker} selected=${selectedColor} onSelect=${onColor}
+        disabled=${colorDisabled} locked=${colorLocked} />
       <div className="section-div" />
-      <div className=${['section-hd', shapeReady ? 'active' : ''].filter(Boolean).join(' ')}>
-        ${shapeLabel}
-      </div>
-      <${ShapePicker}
-        selected=${selectedShape}
-        onSelect=${onShape}
-        disabled=${shapeDisabled}
-        ready=${shapeReady}
-      />
-      <div className="section-div" />
-      <div className="section-hd">your palette</div>
+
+      ${isGesturing ? html`
+        <div className="section-hd active">gesture marks</div>
+        <div className="gesture-guide">
+          ${Object.entries(POSE_LABELS).map(([pose, label]) => html`
+            <div key=${pose} className="pose-pill">
+              <span className="icon">${label.split(' ')[0]}</span>
+              <span>${label.split('→')[1].trim()}</span>
+            </div>
+          `)}
+          ${stampCount > 0 && html`
+            <div className="stamp-tally">${stampCount} mark${stampCount === 1 ? '' : 's'} so far</div>
+          `}
+        </div>
+      ` : html`
+        <div className="section-hd">your palette</div>
+      `}
+
       <div className="palette-scroll">
         ${isGenerating && html`<div className="gen-skeleton" />`}
-        ${images.length === 0 && !isGenerating && html`
-          <div className="palette-empty">choose color → shape → gesture and your image will appear here</div>
+        ${images.length === 0 && !isGenerating && !isGesturing && html`
+          <div className="palette-empty">breathe → pick a color → gesture with your hand → your image appears here</div>
         `}
         ${images.map(img => html`
           <${PaletteImage} key=${img.id} src=${img.src} onClick=${onImageClick} />
@@ -482,21 +655,69 @@ function Sidebar({ selectedColor, selectedShape, onColor, onShape, images, isGen
   `;
 }
 
-function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo, beaconElRef }) {
+// ── Gesture Zone component ────────────────────────────────────────────────────
+function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDone }) {
   const containerRef = useRef(null);
-  const canvasElRef = useRef(null);
+
+  // Size the stamp canvas to fill container on mount
+  useEffect(() => {
+    if (!containerRef.current || !stampCanvasRef.current) return;
+    const { clientWidth: w, clientHeight: h } = containerRef.current;
+    stampCanvasRef.current.width  = w;
+    stampCanvasRef.current.height = h;
+    const ctx = stampCanvasRef.current.getContext('2d');
+    ctx.fillStyle = '#f9f5ef';
+    ctx.fillRect(0, 0, w, h);
+    // Size the hand pip canvas
+    if (handPipRef.current) {
+      handPipRef.current.width  = 224;
+      handPipRef.current.height = 168;
+    }
+  }, []);
+
+  return html`
+    <div className="gesture-zone" ref=${containerRef}>
+      <canvas className="stamp-canvas" ref=${stampCanvasRef} />
+
+      <div className="hand-pip-wrap">
+        <canvas className="hand-pip-canvas" ref=${handPipRef} />
+        <div className="pose-label" id="pose-label">show me your hand</div>
+      </div>
+
+      ${!handsReady && html`
+        <div className="hands-loading">
+          <div className="hands-spinner" />
+          <span>loading gesture recognition…</span>
+        </div>
+      `}
+
+      <div className="gesture-footer">
+        <div className="mark-count">
+          ${stampCount > 0 ? `${stampCount} mark${stampCount === 1 ? '' : 's'}` : 'hold a pose to mark'}
+        </div>
+        <button className="done-btn" onClick=${onDone} disabled=${stampCount === 0}>
+          done
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// ── Canvas Area (Fabric.js collage) ──────────────────────────────────────────
+function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo }) {
+  const containerRef = useRef(null);
+  const canvasElRef  = useRef(null);
 
   useEffect(() => {
     if (!canvasElRef.current || !containerRef.current) return;
     const w = containerRef.current.clientWidth;
     const h = containerRef.current.clientHeight;
-    canvasElRef.current.width = w;
+    canvasElRef.current.width  = w;
     canvasElRef.current.height = h;
     const fc = new fabric.Canvas(canvasElRef.current, {
       width: w, height: h, backgroundColor: '#f9f5ef', selection: true,
     });
     fabricRef.current = fc;
-
     const upper = fc.upperCanvasEl;
     upper.addEventListener('dragover', (e) => e.preventDefault());
     upper.addEventListener('drop', (e) => {
@@ -506,20 +727,15 @@ function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo, beaconElRe
       const rect = upper.getBoundingClientRect();
       addToFabric(fc, src, e.clientX - rect.left, e.clientY - rect.top);
     });
-
-    const onResize = () => {
-      fc.setWidth(containerRef.current.clientWidth);
-      fc.setHeight(containerRef.current.clientHeight);
-      fc.renderAll();
-    };
+    const onResize = () => { fc.setWidth(containerRef.current.clientWidth); fc.setHeight(containerRef.current.clientHeight); fc.renderAll(); };
     window.addEventListener('resize', onResize);
     return () => { window.removeEventListener('resize', onResize); fc.dispose(); };
   }, []);
 
   const remove  = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { fc.remove(o); fc.renderAll(); } };
   const clear   = () => { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#f9f5ef'; fc.renderAll(); };
-  const rotateL = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle || 0) - 15); fc.renderAll(); } };
-  const rotateR = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle || 0) + 15); fc.renderAll(); } };
+  const rotateL = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle||0)-15); fc.renderAll(); } };
+  const rotateR = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle||0)+15); fc.renderAll(); } };
   const save    = () => {
     const fc = fabricRef.current; if (!fc) return;
     const a = document.createElement('a');
@@ -529,29 +745,21 @@ function CanvasArea({ fabricRef, isGenerating, pipVideoRef, hasVideo, beaconElRe
   };
 
   return html`
-    <main className="cv" ref=${containerRef}>
+    <div ref=${containerRef} style=${{ position: 'absolute', inset: 0 }}>
       <canvas ref=${canvasElRef} />
       <div className="cv-toolbar">
-        <button className="cv-btn" onClick=${rotateL} title="rotate left">↺</button>
-        <button className="cv-btn" onClick=${rotateR} title="rotate right">↻</button>
+        <button className="cv-btn" onClick=${rotateL}>↺</button>
+        <button className="cv-btn" onClick=${rotateR}>↻</button>
         <button className="cv-btn" onClick=${remove}>remove</button>
         <button className="cv-btn" onClick=${clear}>clear</button>
         <button className="cv-btn" onClick=${save}>save png</button>
       </div>
       ${isGenerating && html`<div className="gen-badge">creating your image\u2026</div>`}
-      ${html`
-        <div className=${['beacon', hasVideo && 'visible'].filter(Boolean).join(' ')}
-             ref=${beaconElRef}
-             style=${{ left: '50%', top: '50%' }}
-        />
-      `}
-      ${/* Always in DOM so pipVideoRef is never null when startSession sets srcObject */html`
-        <div className=${['webcam-pip', hasVideo && 'visible'].filter(Boolean).join(' ')}>
-          <video ref=${pipVideoRef} muted playsinline autoplay />
-          <div className="webcam-label">mix is here</div>
-        </div>
-      `}
-    </main>
+      <div className=${['webcam-pip', hasVideo ? 'visible' : ''].filter(Boolean).join(' ')}>
+        <video ref=${pipVideoRef} muted playsinline autoplay />
+        <div className="webcam-label">mix is here</div>
+      </div>
+    </div>
   `;
 }
 
@@ -594,189 +802,288 @@ function CloseOverlay({ message, onSave, onEnd }) {
   `;
 }
 
-// ── Fabric helper ──────────────────────────────────────────────────────────
+// ── Fabric helper ─────────────────────────────────────────────────────────────
 function addToFabric(fc, src, x, y) {
   if (!fc) return;
-  // Only set crossOrigin for real http(s) URLs, not data: URIs
   const opts = src.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
-
   fabric.Image.fromURL(src, (img) => {
     if (!img || !img.width) return;
-
     const scale  = Math.min(240 / img.width, 300 / img.height, 1);
-    const angle  = (Math.random() - 0.5) * 30;           // ±15° — natural scatter
-    const border = 14 + Math.round(Math.random() * 8);   // 14–22px thick cream border
-    const sBlur  = 18 + Math.round(Math.random() * 10);  // 18–28px soft shadow
-    const sOff   = 4 + Math.round(Math.random() * 6);    // 4–10px shadow offset
-
+    const angle  = (Math.random() - 0.5) * 30;
+    const border = 14 + Math.round(Math.random() * 8);
+    const sBlur  = 18 + Math.round(Math.random() * 10);
+    const sOff   = 4  + Math.round(Math.random() * 6);
     const cx = x != null ? x : fc.width  / 2 + (Math.random() - 0.5) * 120;
     const cy = y != null ? y : fc.height / 2 + (Math.random() - 0.5) * 100;
-
     img.set({
-      left:   cx - (img.width  * scale) / 2,
-      top:    cy - (img.height * scale) / 2,
-      scaleX: scale,
-      scaleY: scale,
-      angle:  angle,
-      cornerStyle: 'circle',
-      cornerColor: '#7c5cbf',
-      cornerSize: 9,
-      transparentCorners: false,
-      // Thick cream/off-white border — torn print feel
-      stroke: '#ede5d5',
-      strokeWidth: border,
-      strokeLineJoin: 'round',
-      // Strong drop shadow — paper lying on a surface
-      shadow: new fabric.Shadow({
-        color:   'rgba(40,30,20,0.35)',
-        blur:    sBlur,
-        offsetX: sOff,
-        offsetY: sOff + 2,
-      }),
-      // Slight opacity variation — aged, layered paper
+      left: cx - (img.width  * scale) / 2,
+      top:  cy - (img.height * scale) / 2,
+      scaleX: scale, scaleY: scale, angle,
+      cornerStyle: 'circle', cornerColor: '#7c5cbf', cornerSize: 9, transparentCorners: false,
+      stroke: '#ede5d5', strokeWidth: border, strokeLineJoin: 'round',
+      shadow: new fabric.Shadow({ color: 'rgba(40,30,20,0.35)', blur: sBlur, offsetX: sOff, offsetY: sOff + 2 }),
       opacity: 0.88 + Math.random() * 0.12,
     });
-
-    fc.add(img);
-    fc.setActiveObject(img);
-    fc.renderAll();
+    fc.add(img); fc.setActiveObject(img); fc.renderAll();
   }, opts);
 }
 
-// ── App ────────────────────────────────────────────────────────────────────
+// ── App ───────────────────────────────────────────────────────────────────────
 function App() {
   const [sessionActive, setSessionActive] = useState(false);
   const [status,        setStatus]        = useState('click start to meet Mix');
   const [orbState,      setOrbState]      = useState('idle');
   const [selectedColor, setSelectedColor] = useState(null);
-  const [selectedShape, setSelectedShape] = useState(null);
   const [images,        setImages]        = useState([]);
   const [transcript,    setTranscript]    = useState('');
   const [isGenerating,  setIsGenerating]  = useState(false);
   const [closing,       setClosing]       = useState(false);
+  const [stampCount,    setStampCount]    = useState(0);
+  const [handsReady,    setHandsReady]    = useState(false);
 
-  // flowStep: 'idle' | 'color_picked' | 'generating'
+  // flowStep: 'idle' | 'color_picked' | 'gesturing' | 'generating'
   const [flowStep, setFlowStep] = useState('idle');
-  const [hasVideo, setHasVideo] = useState(false);   // tracks camera grant → triggers re-render
+  const [hasVideo, setHasVideo] = useState(false);
 
+  // Core refs
   const wsRef            = useRef(null);
   const fabricRef        = useRef(null);
   const mediaStreamRef   = useRef(null);
   const processorRef     = useRef(null);
   const canvasIntervalRef = useRef(null);
 
-  // Video + beacon refs
-  const videoRef         = useRef(null);   // hidden video for motion centroid
-  const pipVideoRef      = useRef(null);   // visible PiP
-  const motionCanRef     = useRef(null);   // hidden canvas for pixel diff
-  const beaconElRef      = useRef(null);   // the beacon DOM element (direct style updates)
-  const beaconSmoothed   = useRef({ x: 0.5, y: 0.5 }); // smoothed 0-1 position
-  const beaconTrackRef   = useRef(null);   // interval ID for beacon tracking
-  const hasVideoRef      = useRef(false);  // used inside callbacks
+  // Video refs — single stream source
+  const videoRef    = useRef(null);   // hidden, feeds MediaPipe
+  const pipVideoRef = useRef(null);   // visible PiP during collage mode
+  const hasVideoRef = useRef(false);
 
-  // Wire up orb state setter for audio module
+  // Gesture refs
+  const stampCanvasRef    = useRef(null);
+  const handPipRef        = useRef(null);
+  const handsRef          = useRef(null);
+  const gestureActiveRef  = useRef(false);
+  const currentPoseRef    = useRef(null);
+  const poseStartRef      = useRef(null);
+  const stampCooldownRef  = useRef(false);
+  const stampPosesRef     = useRef([]);
+  const lastPalmRef       = useRef({ x: 0.5, y: 0.5 });
+  const selectedColorHexRef = useRef('#4a7fa5');
+
   _orbStateSetter = setOrbState;
 
-  // ── Beacon tracking — follows motion centroid in webcam frame ──────────
+  // ── MediaPipe onResults callback ─────────────────────────────────────────
+  function onHandResults(results) {
+    const pipCanvas = handPipRef.current;
+    if (!pipCanvas) return;
+    const ctx = pipCanvas.getContext('2d');
+    const w = pipCanvas.width, h = pipCanvas.height;
 
-  function updateBeaconPos(targetX, targetY) {
-    const s = beaconSmoothed.current;
-    s.x += (targetX - s.x) * 0.10;  // gentle lerp — floats, not jumps
-    s.y += (targetY - s.y) * 0.10;
-    const el = beaconElRef.current;
-    if (el) {
-      el.style.left = (s.x * 100) + '%';
-      el.style.top  = (s.y * 100) + '%';
+    // Draw mirrored webcam frame as background
+    ctx.save();
+    ctx.translate(w, 0); ctx.scale(-1, 1);
+    ctx.drawImage(results.image, 0, 0, w, h);
+    ctx.restore();
+
+    // Subtle dark vignette for contrast
+    ctx.fillStyle = 'rgba(14,10,24,0.28)';
+    ctx.fillRect(0, 0, w, h);
+
+    let detectedPose = null;
+
+    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+      const lm = results.multiHandLandmarks[0];
+      // Mirror landmarks for display (webcam is front-facing)
+      const mlm = lm.map(l => ({ x: 1 - l.x, y: l.y, z: l.z }));
+
+      // Draw skeleton
+      if (window.drawConnectors && window.HAND_CONNECTIONS) {
+        window.drawConnectors(ctx, mlm, window.HAND_CONNECTIONS,
+          { color: 'rgba(200,175,255,0.45)', lineWidth: 1.5 });
+      }
+      if (window.drawLandmarks) {
+        window.drawLandmarks(ctx, mlm,
+          { color: 'rgba(200,175,255,0.85)', fillColor: 'rgba(130,100,210,0.6)', radius: 2.5 });
+      }
+
+      // Classify pose (unmirrored landmarks)
+      detectedPose = classifyPose(lm);
+
+      // Palm center (mirrored for pip position)
+      const pc = palmCenter(lm);
+      const palmX = (1 - pc.x) * w;
+      const palmY = pc.y * h;
+
+      // Store for stamp positioning
+      lastPalmRef.current = { x: 1 - pc.x, y: pc.y };
+
+      // Draw progress arc around palm
+      const now = Date.now();
+      if (detectedPose && detectedPose === currentPoseRef.current
+          && poseStartRef.current && !stampCooldownRef.current) {
+        const pct = Math.min((now - poseStartRef.current) / 1500, 1);
+        ctx.beginPath();
+        ctx.strokeStyle = 'rgba(220,190,100,0.9)';
+        ctx.lineWidth = 3;
+        ctx.arc(palmX, palmY, 20, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+        ctx.stroke();
+      }
+
+      // Palm dot
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,220,120,0.75)';
+      ctx.arc(palmX, palmY, 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Pose state machine
+    if (detectedPose !== currentPoseRef.current) {
+      currentPoseRef.current = detectedPose;
+      poseStartRef.current = detectedPose ? Date.now() : null;
+      // Update pose label (direct DOM, no React re-render)
+      const label = document.getElementById('pose-label');
+      if (label) label.textContent = detectedPose ? POSE_LABELS[detectedPose] || detectedPose : 'show me your hand';
+    } else if (
+      detectedPose &&
+      poseStartRef.current &&
+      !stampCooldownRef.current &&
+      Date.now() - poseStartRef.current >= 1500
+    ) {
+      doStamp(detectedPose);
     }
   }
 
-  function stopBeaconTracking() {
-    if (beaconTrackRef.current) {
-      clearInterval(beaconTrackRef.current);
-      beaconTrackRef.current = null;
-    }
-  }
+  // ── Stamp action ─────────────────────────────────────────────────────────
+  function doStamp(pose) {
+    stampCooldownRef.current = true;
+    const canvas = stampCanvasRef.current;
+    if (!canvas) { stampCooldownRef.current = false; return; }
 
-  function startBeaconTracking() {
-    stopBeaconTracking();
-    const video  = videoRef.current;
-    const canvas = motionCanRef.current;
-    if (!video || !canvas) return;
-
+    const pos = lastPalmRef.current;
+    const x = pos.x * canvas.width;
+    const y = pos.y * canvas.height;
     const ctx = canvas.getContext('2d');
-    canvas.width  = 80;
-    canvas.height = 60;
-    let prevData = null;
 
-    function detect() {
-      try {
-        ctx.drawImage(video, 0, 0, 80, 60);
-        const curr = ctx.getImageData(0, 0, 80, 60).data;
-        if (prevData) {
-          let wx = 0, wy = 0, total = 0;
-          for (let y = 0; y < 60; y++) {
-            for (let x = 0; x < 80; x++) {
-              const i = (y * 80 + x) * 4;
-              const diff = Math.abs(curr[i]   - prevData[i])
-                         + Math.abs(curr[i+1] - prevData[i+1])
-                         + Math.abs(curr[i+2] - prevData[i+2]);
-              if (diff > 22) {
-                wx += x * diff;
-                wy += y * diff;
-                total += diff;
-              }
-            }
-          }
-          if (total > 0) {
-            // Mirror x so beacon follows correctly (webcam is front-facing, mirrored in PiP)
-            const rawX = 1 - (wx / total) / 80;
-            const rawY = (wy / total) / 60;
-            updateBeaconPos(rawX, rawY);
-          } else {
-            // No motion — drift gently back toward center
-            updateBeaconPos(0.5, 0.5);
-          }
-        }
-        prevData = new Uint8ClampedArray(curr);
-      } catch (_) { /* video not ready yet — skip frame */ }
-    }
+    drawStamp(ctx, pose, x, y, selectedColorHexRef.current);
+    stampPosesRef.current.push(pose);
+    setStampCount(prev => prev + 1);
 
-    beaconTrackRef.current = setInterval(detect, 200); // 5 fps
+    // Cooldown: 1s before next stamp
+    setTimeout(() => {
+      stampCooldownRef.current = false;
+      poseStartRef.current = Date.now(); // must re-hold for 1.5s after cooldown
+    }, 1000);
   }
 
-  // ── Canvas action handlers ─────────────────────────────────────────────
+  // ── MediaPipe init + frame loop ──────────────────────────────────────────
+  async function startGestureMode() {
+    if (gestureActiveRef.current) return;
+    gestureActiveRef.current = true;
+    setHandsReady(false);
+
+    if (!handsRef.current) {
+      try {
+        const h = new window.Hands({
+          locateFile: (file) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`,
+        });
+        h.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.7,
+          minTrackingConfidence: 0.5,
+        });
+        h.onResults(onHandResults);
+        await h.initialize();
+        handsRef.current = h;
+      } catch (e) {
+        console.error('MediaPipe Hands init failed:', e);
+        gestureActiveRef.current = false;
+        return;
+      }
+    }
+
+    setHandsReady(true);
+    scheduleHandFrame();
+  }
+
+  function scheduleHandFrame() {
+    if (!gestureActiveRef.current) return;
+    setTimeout(async () => {
+      const video = videoRef.current;
+      if (video && video.readyState >= 2 && handsRef.current && gestureActiveRef.current) {
+        try { await handsRef.current.send({ image: video }); } catch (_) {}
+      }
+      scheduleHandFrame();
+    }, 100); // 10 fps — enough for reliable pose detection
+  }
+
+  function stopGestureMode() {
+    gestureActiveRef.current  = false;
+    currentPoseRef.current    = null;
+    poseStartRef.current      = null;
+    stampCooldownRef.current  = false;
+  }
+
+  // ── Color handler ─────────────────────────────────────────────────────────
   const handleColor = useCallback((c) => {
-    // Re-picking a color resets the ritual
     setSelectedColor(c.name);
-    setSelectedShape(null);
+    selectedColorHexRef.current = c.hex;
     setFlowStep('color_picked');
+    setStampCount(0);
+    stampPosesRef.current = [];
+
+    // Clear stamp canvas for fresh start
+    if (stampCanvasRef.current) {
+      const ctx = stampCanvasRef.current.getContext('2d');
+      ctx.fillStyle = '#f9f5ef';
+      ctx.fillRect(0, 0, stampCanvasRef.current.width, stampCanvasRef.current.height);
+    }
+
+    // Stop any running gesture mode
+    stopGestureMode();
+
+    // Notify backend (color pick triggers Mix response + gesture invitation)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'canvas_action', action_type: 'color', value: c.name, hex: c.hex,
       }));
     }
+
+    // Start gesture mode after a short delay (let Mix acknowledge the color first)
+    setTimeout(() => {
+      setFlowStep('gesturing');
+      startGestureMode();
+    }, 1800);
   }, []);
 
-  const handleShape = useCallback((s) => {
-    setSelectedShape(s.name);
+  // ── Done handler — export stamp canvas → trigger generation ──────────────
+  const handleDone = useCallback(() => {
+    stopGestureMode();
     setFlowStep('generating');
+
+    // Export stamp canvas as JPEG
+    let sketchB64 = null;
+    if (stampCanvasRef.current) {
+      sketchB64 = stampCanvasRef.current.toDataURL('image/jpeg', 0.85).split(',')[1];
+    }
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
-        type: 'canvas_action', action_type: 'shape', value: s.name,
+        type:        'canvas_action',
+        action_type: 'done',
+        sketch_b64:  sketchB64,
+        stamp_poses: stampPosesRef.current,
       }));
     }
-    // Shape pick triggers image generation on the backend — no gesture needed
   }, []);
 
   const handleImageClick = useCallback((src) => {
     addToFabric(fabricRef.current, src);
   }, []);
 
-  // ── Start session ──────────────────────────────────────────────────────
+  // ── Start session ─────────────────────────────────────────────────────────
   const startSession = useCallback(async () => {
     setStatus('requesting mic & camera\u2026');
-
-    // Try audio + video; fall back to audio-only if camera is denied
     try {
       _audioCtx = new AudioContext();
       mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
@@ -787,29 +1094,23 @@ function App() {
       setHasVideo(true);
     } catch {
       try {
-        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({
-          audio: true, video: false,
-        });
-        hasVideoRef.current = false;
-        setHasVideo(false);
+        mediaStreamRef.current = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        hasVideoRef.current = false; setHasVideo(false);
       } catch {
-        setStatus('mic access denied');
-        return;
+        setStatus('mic access denied'); return;
       }
     }
 
-    // Point both video elements at the media stream + start beacon tracking
-    if (hasVideoRef.current && videoRef.current) {
-      videoRef.current.srcObject = mediaStreamRef.current;
-      videoRef.current.play().catch(() => {});
-    }
-    if (hasVideoRef.current && pipVideoRef.current) {
-      pipVideoRef.current.srcObject = mediaStreamRef.current;
-      pipVideoRef.current.play().catch(() => {});
-    }
-    // Small delay so the video element is ready before we start reading frames
+    // Wire hidden video (MediaPipe source) + PiP to stream
     if (hasVideoRef.current) {
-      setTimeout(startBeaconTracking, 1200);
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStreamRef.current;
+        videoRef.current.play().catch(() => {});
+      }
+      if (pipVideoRef.current) {
+        pipVideoRef.current.srcObject = mediaStreamRef.current;
+        pipVideoRef.current.play().catch(() => {});
+      }
     }
 
     setStatus('connecting to Mix\u2026');
@@ -825,7 +1126,6 @@ function App() {
       setTranscript('');
       setFlowStep('idle');
 
-      // Ambient audio
       const amb = document.getElementById('ambient');
       amb.volume = 0.08;
       amb.play().catch(() => {});
@@ -836,17 +1136,16 @@ function App() {
       proc.onaudioprocess = (e) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         const input = e.inputBuffer.getChannelData(0);
-        const ratio  = _audioCtx.sampleRate / 16000;
+        const ratio = _audioCtx.sampleRate / 16000;
         const outLen = Math.round(input.length / ratio);
-        const res    = new Float32Array(outLen);
+        const res = new Float32Array(outLen);
         for (let i = 0; i < outLen; i++) res[i] = input[Math.round(i * ratio)];
         ws.send(float32ToInt16(res).buffer);
       };
-      source.connect(proc);
-      proc.connect(_audioCtx.destination);
+      source.connect(proc); proc.connect(_audioCtx.destination);
       processorRef.current = proc;
 
-      // Canvas stream — Mix sees the collage every 2 seconds
+      // Canvas stream — Mix sees the collage every 2s
       canvasIntervalRef.current = setInterval(() => {
         if (!ws || ws.readyState !== WebSocket.OPEN || !fabricRef.current) return;
         const b64 = fabricRef.current.toDataURL('image/jpeg', 0.5).split(',')[1];
@@ -855,34 +1154,26 @@ function App() {
     };
 
     ws.onmessage = (event) => {
-      if (event.data instanceof ArrayBuffer) {
-        enqueueAudio(event.data);
-        return;
-      }
+      if (event.data instanceof ArrayBuffer) { enqueueAudio(event.data); return; }
       try {
         const msg = JSON.parse(event.data);
+        if (msg.transcript) setTranscript(msg.transcript);
 
-        if (msg.transcript) {
-          setTranscript(msg.transcript);
+        // Voice selected a color
+        if (msg.type === 'voice_select' && msg.kind === 'color') {
+          const color = COLORS.find(c => c.name === msg.value);
+          if (color) handleColor(color);
         }
 
-        // ── Voice selected a color or shape ────────────────────────────
-        if (msg.type === 'voice_select') {
-          if (msg.kind === 'color') {
-            const color = COLORS.find(c => c.name === msg.value);
-            if (color) handleColor(color);
-          } else if (msg.kind === 'shape') {
-            const shape = SHAPES.find(s => s.name === msg.value);
-            if (shape) handleShape(shape);
-          }
+        // Voice said "done" — trigger same as button
+        if (msg.type === 'voice_done') {
+          handleDone();
         }
 
         if (msg.type === 'generated_image') {
           setIsGenerating(false);
-          // Ritual complete — reset so user can start again or just reflect
           setFlowStep('idle');
           setSelectedColor(null);
-          setSelectedShape(null);
           const src = msg.url || 'data:image/jpeg;base64,' + msg.data;
           setImages(prev => [{ id: Date.now() + Math.random(), src }, ...prev]);
           addToFabric(fabricRef.current, src);
@@ -895,42 +1186,32 @@ function App() {
           setStatus('creating your image\u2026');
         }
 
-        if (msg.error) {
-          setStatus('error: ' + msg.error);
-        }
+        if (msg.error) setStatus('error: ' + msg.error);
       } catch (_) {}
     };
 
-    ws.onclose = () => {
-      setSessionActive(false);
-      setStatus('session ended');
-      setOrbState('idle');
-      setFlowStep('idle');
-    };
-    ws.onerror = () => {
-      setStatus('connection error \u2014 is the server running?');
-    };
-  }, []);
+    ws.onclose = () => { setSessionActive(false); setStatus('session ended'); setOrbState('idle'); setFlowStep('idle'); };
+    ws.onerror = () => { setStatus('connection error \u2014 is the server running?'); };
+  }, [handleColor, handleDone]);
 
-  // ── End session ────────────────────────────────────────────────────────
+  // ── End session ───────────────────────────────────────────────────────────
   const endSession = useCallback(() => {
-    stopBeaconTracking();
-    if (processorRef.current)    { processorRef.current.disconnect(); processorRef.current = null; }
-    if (mediaStreamRef.current)  { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
-    if (canvasIntervalRef.current) { clearInterval(canvasIntervalRef.current); canvasIntervalRef.current = null; }
-    if (wsRef.current)           { wsRef.current.close(); wsRef.current = null; }
-    if (_audioCtx)               { _audioCtx.close(); _audioCtx = null; }
-    if (videoRef.current)        { videoRef.current.srcObject = null; }
-    if (pipVideoRef.current)     { pipVideoRef.current.srcObject = null; }
+    stopGestureMode();
+    if (processorRef.current)     { processorRef.current.disconnect(); processorRef.current = null; }
+    if (mediaStreamRef.current)   { mediaStreamRef.current.getTracks().forEach(t => t.stop()); mediaStreamRef.current = null; }
+    if (canvasIntervalRef.current){ clearInterval(canvasIntervalRef.current); canvasIntervalRef.current = null; }
+    if (wsRef.current)            { wsRef.current.close(); wsRef.current = null; }
+    if (_audioCtx)                { _audioCtx.close(); _audioCtx = null; }
+    if (videoRef.current)         { videoRef.current.srcObject = null; }
+    if (pipVideoRef.current)      { pipVideoRef.current.srcObject = null; }
     const amb = document.getElementById('ambient');
     amb.pause(); amb.currentTime = 0;
     _playbackQueue = []; _isPlaying = false;
     hasVideoRef.current = false;
-    setHasVideo(false);
-    setSessionActive(false); setOrbState('idle');
+    setHasVideo(false); setSessionActive(false); setOrbState('idle');
     setStatus('session ended \u2014 click start to begin again');
-    setTranscript(''); setSelectedColor(null); setSelectedShape(null);
-    setFlowStep('idle'); setClosing(false);
+    setTranscript(''); setSelectedColor(null);
+    setFlowStep('idle'); setClosing(false); setStampCount(0); setHandsReady(false);
   }, []);
 
   const initiateClose = useCallback(() => {
@@ -951,27 +1232,45 @@ function App() {
     setTimeout(endSession, 500);
   }, [endSession]);
 
+  const isGesturing = flowStep === 'gesturing';
+
   return html`
     <div className="app-grid">
       <${Header} status=${status} orbState=${orbState} />
       <${Sidebar}
         selectedColor=${selectedColor}
-        selectedShape=${selectedShape}
         onColor=${handleColor}
-        onShape=${handleShape}
         images=${images}
         isGenerating=${isGenerating}
         sessionActive=${sessionActive}
         flowStep=${flowStep}
+        stampCount=${stampCount}
         onImageClick=${handleImageClick}
       />
-      <${CanvasArea}
-        fabricRef=${fabricRef}
-        isGenerating=${isGenerating}
-        pipVideoRef=${pipVideoRef}
-        hasVideo=${hasVideo}
-        beaconElRef=${beaconElRef}
-      />
+
+      <main className="cv">
+        ${/* Gesture zone — visible while gesturing */}
+        <div style=${{ display: isGesturing ? 'block' : 'none', position: 'absolute', inset: 0, zIndex: 2 }}>
+          <${GestureZone}
+            stampCanvasRef=${stampCanvasRef}
+            handPipRef=${handPipRef}
+            stampCount=${stampCount}
+            handsReady=${handsReady}
+            onDone=${handleDone}
+          />
+        </div>
+
+        ${/* Collage canvas — always mounted to preserve Fabric state */}
+        <div style=${{ display: isGesturing ? 'none' : 'block', position: 'absolute', inset: 0, zIndex: 1 }}>
+          <${CanvasArea}
+            fabricRef=${fabricRef}
+            isGenerating=${isGenerating}
+            pipVideoRef=${pipVideoRef}
+            hasVideo=${hasVideo}
+          />
+        </div>
+      </main>
+
       <${OrbPanel} orbState=${orbState} transcript=${transcript} />
       <${Footer} sessionActive=${sessionActive} status=${status} onStart=${startSession} onStop=${initiateClose} />
     </div>
@@ -982,12 +1281,12 @@ function App() {
         onEnd=${endSession}
       />
     `}
+    ${/* Hidden video element — MediaPipe reads from this */}
     <video ref=${videoRef} style=${{ display: 'none' }} muted playsinline />
-    <canvas ref=${motionCanRef} style=${{ display: 'none' }} />
   `;
 }
 
-// ── Mount ──────────────────────────────────────────────────────────────────
+// ── Mount ────────────────────────────────────────────────────────────────────
 ReactDOM.createRoot(document.getElementById('root')).render(html`<${App} />`);
 </script>
 </body>

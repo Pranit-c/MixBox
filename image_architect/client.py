@@ -37,24 +37,14 @@ COLOR_PROMPT_MAP = {
     "gold":      "candlelight on old wood, amber warmth, present and glowing",
 }
 
-# ── Shape → visual prompt map ─────────────────────────────────────────────────
+# ── Gesture pose → visual quality ─────────────────────────────────────────────
 
-SHAPE_PROMPT_MAP = {
-    "circle":   "smooth river stones, circular forms in water, wholeness and continuity",
-    "square":   "geometric tiles and structured forms, order and containment, angular texture",
-    "triangle": "mountain peaks, sharp angles, upward movement, tension and direction",
-    "star":     "light fracturing through crystal, radiating patterns, expansion from center",
-    "spiral":   "nautilus shell cross-section, unfolding spiral, growth from within",
-    "wave":     "ocean wave breaking at shore, flowing movement, rhythm and release",
-    "cloud":    "cumulus clouds from below, soft mass and open light, drifting freely",
-}
-
-# ── Gesture intensity → motion quality ────────────────────────────────────────
-
-GESTURE_QUALITY_MAP = {
-    "gentle": "soft and delicate, subtle presence, quiet movement, still",
-    "medium": "flowing and dynamic, purposeful motion, in movement",
-    "strong": "bold and energetic, expansive gesture, full presence",
+POSE_PROMPT_MAP = {
+    "open":  "radiating outward, expansive, open and spreading, light emanating from center",
+    "fist":  "dense and contained, concentrated energy, enclosed, held and heavy",
+    "point": "directed and focused, single intention, sharp and reaching toward something",
+    "peace": "branching and diverging, two paths, forked and connected, dual nature",
+    "pinch": "delicate and intimate, small and precise, fine detail, a single point of light",
 }
 
 # ── Mood tone keywords → Imagen prompt enrichment ────────────────────────────
@@ -139,25 +129,27 @@ async def _call_architect(prompt: str, mood_tone: str, request_id: str) -> str |
 
 async def generate_gesture_image(
     color: str,
-    shape: str,
-    gesture_intensity: str,
+    stamp_poses: list,
     voice_transcript: str,
     on_image_ready,
 ):
     """
-    Generate an image from the full three-step creative ritual:
-    color + shape + gesture + voice.
+    Generate an image from the gesture collage ritual:
+    color + hand gesture poses + voice context.
 
-    color:             e.g. "blue"
-    shape:             e.g. "circle"
-    gesture_intensity: "gentle", "medium", or "strong"
-    voice_transcript:  what the user said during the gesture window
-    on_image_ready:    async callback(base64_str)
+    color:            e.g. "blue"
+    stamp_poses:      list of pose names used, e.g. ["open", "fist", "peace"]
+    voice_transcript: what the user said while creating
+    on_image_ready:   async callback(base64_str)
     """
-    # Base visual prompts from color and shape
+    # Base visual from color
     color_base = COLOR_PROMPT_MAP.get(color.lower(), DEFAULT_PROMPTS[0]) if color else DEFAULT_PROMPTS[0]
-    shape_base = SHAPE_PROMPT_MAP.get(shape.lower(), "") if shape else ""
-    gesture_quality = GESTURE_QUALITY_MAP.get(gesture_intensity, "expressive, present")
+
+    # Build gesture quality from unique poses (preserve order, deduplicate)
+    seen = set()
+    unique_poses = [p for p in stamp_poses if not (p in seen or seen.add(p))]
+    pose_qualities = [POSE_PROMPT_MAP[p] for p in unique_poses if p in POSE_PROMPT_MAP]
+    gesture_str = ", ".join(pose_qualities) if pose_qualities else "expressive, present, flowing"
 
     # Detect mood from voice transcript
     mood_tone = "reflective"
@@ -167,22 +159,21 @@ async def generate_gesture_image(
             mood_tone = keyword
             break
 
-    # Build combined prompt from all four inputs
-    parts = [p for p in [color_base, shape_base, gesture_quality] if p]
+    # Build combined prompt
+    parts = [p for p in [color_base, gesture_str] if p]
     if voice_transcript and len(voice_transcript.strip()) > 5:
         parts.append(voice_transcript.strip()[:120])
     prompt = ", ".join(parts)
 
     logger.info(
-        f"Gesture image — color={color}, shape={shape}, "
-        f"motion={gesture_intensity}, mood={mood_tone}"
+        f"Gesture image — color={color!r}, poses={unique_poses}, mood={mood_tone}"
     )
-    logger.info(f"Prompt: {prompt[:120]}…")
+    logger.info(f"Prompt: {prompt[:140]}…")
 
     img_b64 = await _call_architect(
         prompt=prompt,
         mood_tone=mood_tone,
-        request_id=f"gesture-{color}-{shape}-{abs(hash(voice_transcript + gesture_intensity))}",
+        request_id=f"gesture-{color}-{'-'.join(unique_poses[:3])}-{abs(hash(voice_transcript))}",
     )
     if img_b64:
         await on_image_ready(img_b64)
