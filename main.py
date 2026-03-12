@@ -85,7 +85,7 @@ run_config = RunConfig(
     speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Kore"    # soft, warm, gentle female voice
+                voice_name="Zephyr"  # warm, bright, gentle voice
             )
         )
     ),
@@ -209,7 +209,7 @@ async def websocket_endpoint(ws: WebSocket):
                                 # Store shape — auto-trigger image generation now
                                 flow_state["shape"] = action_value
                                 color = flow_state["color"]
-                                voice = flow_state["voice_transcript"]  # includes texture check-in
+                                voice = flow_state["voice_transcript"]  # whatever they've said this session
 
                                 logger.info(
                                     f"Shape selected → generating: color={color!r}, "
@@ -218,10 +218,9 @@ async def websocket_endpoint(ws: WebSocket):
 
                                 hint = (
                                     f"[CANVAS ACTION: User selected shape '{action_value}' "
-                                    f"with color '{color}'. Texture context from their words: '{voice}'. "
-                                    f"Notice the color and shape together in one warm, brief sentence. "
-                                    f"Then say: 'Let me make something from that.' "
-                                    f"Stop. Wait quietly until the image appears. Say nothing more.]"
+                                    f"with color '{color}'. Context from their words: '{voice}'. "
+                                    f"Say exactly: 'Let me make something from that.' "
+                                    f"Then go completely quiet. Do not say anything else until the image appears.]"
                                 )
 
                                 # Auto-trigger image generation (guard against double-fire)
@@ -375,7 +374,8 @@ async def websocket_endpoint(ws: WebSocket):
                                     live_request_queue.send_content(
                                         types.Content(parts=[types.Part(text=(
                                             f"[VOICE: User chose the color '{word}' by speaking. "
-                                            f"Acknowledge with 2–4 words only. Stop.]"
+                                            f"Acknowledge it warmly in 4–6 words. "
+                                            f"Then gently invite a shape — one soft question. Two sentences total. Then quiet.]"
                                         ))])
                                     )
                                 except Exception as e:
