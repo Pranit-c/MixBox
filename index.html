@@ -1299,7 +1299,6 @@ function App() {
       />
 
       <main className="cv">
-        ${/* Gesture zone — visible while gesturing */}
         <div style=${{ display: isGesturing ? 'block' : 'none', position: 'absolute', inset: 0, zIndex: 2 }}>
           <${GestureZone}
             stampCanvasRef=${stampCanvasRef}
@@ -1309,8 +1308,6 @@ function App() {
             onDone=${handleDone}
           />
         </div>
-
-        ${/* Collage canvas — always mounted to preserve Fabric state */}
         <div style=${{ display: isGesturing ? 'none' : 'block', position: 'absolute', inset: 0, zIndex: 1 }}>
           <${CanvasArea}
             fabricRef=${fabricRef}
@@ -1331,7 +1328,6 @@ function App() {
         onEnd=${endSession}
       />
     `}
-    ${/* Hidden video element — MediaPipe reads from this */}
     <video ref=${videoRef} style=${{ display: 'none' }} muted playsinline />
   `;
 }
