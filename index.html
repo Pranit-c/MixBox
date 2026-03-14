@@ -419,7 +419,7 @@ const COLORS = [
 ];
 
 const POSE_LABELS = {
-  open:  '✋ open palm  →  burst',
+  open:  '✋ open palm  →  paint',
   fist:  '✊ fist  →  circle',
   point: '☝️ point  →  spike',
   peace: '✌️ peace  →  branch',
@@ -883,16 +883,18 @@ function App() {
   const pipVideoRef = useRef(null);   // visible PiP during collage mode
   const hasVideoRef = useRef(false);
 
-  // Gesture refs
+  // Gesture refs — indexed [0,1] for up to 2 hands
   const stampCanvasRef    = useRef(null);
   const handPipRef        = useRef(null);
   const handsRef          = useRef(null);
   const gestureActiveRef  = useRef(false);
-  const currentPoseRef    = useRef(null);
-  const poseStartRef      = useRef(null);
-  const stampCooldownRef  = useRef(false);
+  const currentPoseRef    = useRef([null, null]);
+  const poseStartRef      = useRef([null, null]);
+  const stampCooldownRef  = useRef([false, false]);
   const stampPosesRef     = useRef([]);
-  const lastPalmRef       = useRef({ x: 0.5, y: 0.5 });
+  const lastPalmRef       = useRef([{ x: 0.5, y: 0.5 }, { x: 0.5, y: 0.5 }]);
+  const prevBrushPalmRef  = useRef([null, null]);   // last drawn pos for brush
+  const brushCountedRef   = useRef([false, false]); // stamp counted for this brush stroke?
   const selectedColorHexRef = useRef('#4a7fa5');
 
   _orbStateSetter = setOrbState;
@@ -913,18 +915,30 @@ function App() {
     ctx.drawImage(results.image, 0, 0, w, h);
     ctx.restore();
 
-    // Subtle dark vignette for contrast
+    // Subtle dark vignette
     ctx.fillStyle = 'rgba(14,10,24,0.28)';
     ctx.fillRect(0, 0, w, h);
 
-    let detectedPose = null;
+    const hands = (results.multiHandLandmarks && results.multiHandLandmarks.length > 0)
+      ? results.multiHandLandmarks : [];
 
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      const lm = results.multiHandLandmarks[0];
-      // Mirror landmarks for display (webcam is front-facing)
+    // Reset brush tracking for hands that disappeared this frame
+    for (let i = hands.length; i < 2; i++) {
+      if (currentPoseRef.current[i] !== null) {
+        currentPoseRef.current[i] = null;
+        poseStartRef.current[i]   = null;
+        prevBrushPalmRef.current[i] = null;
+        brushCountedRef.current[i]  = false;
+      }
+    }
+
+    // Update pose label from first active hand (direct DOM — no React re-render)
+    const labelEl = document.getElementById('pose-label');
+
+    hands.forEach((lm, handIdx) => {
       const mlm = lm.map(l => ({ x: 1 - l.x, y: l.y, z: l.z }));
 
-      // Draw skeleton
+      // Draw skeleton on PiP
       if (window.drawConnectors && window.HAND_CONNECTIONS) {
         window.drawConnectors(ctx, mlm, window.HAND_CONNECTIONS,
           { color: 'rgba(200,175,255,0.45)', lineWidth: 1.5 });
@@ -934,27 +948,91 @@ function App() {
           { color: 'rgba(200,175,255,0.85)', fillColor: 'rgba(130,100,210,0.6)', radius: 2.5 });
       }
 
-      // Classify pose (unmirrored landmarks)
-      detectedPose = classifyPose(lm);
-
-      // Palm center (mirrored for pip position)
-      const pc = palmCenter(lm);
+      const pose = classifyPose(lm);
+      const pc   = palmCenter(lm);
       const palmX = (1 - pc.x) * w;
       const palmY = pc.y * h;
 
-      // Store for stamp positioning
-      lastPalmRef.current = { x: 1 - pc.x, y: pc.y };
+      // Store normalised palm position for stamp placement
+      lastPalmRef.current[handIdx] = { x: 1 - pc.x, y: pc.y };
 
-      // Draw progress arc around palm
-      const now = Date.now();
-      if (detectedPose && detectedPose === currentPoseRef.current
-          && poseStartRef.current && !stampCooldownRef.current) {
-        const pct = Math.min((now - poseStartRef.current) / 1500, 1);
+      // Update PiP label from hand 0 (or whichever has a pose)
+      if (handIdx === 0 || (handIdx === 1 && !currentPoseRef.current[0])) {
+        if (labelEl) labelEl.textContent = pose ? POSE_LABELS[pose] || pose : 'show me your hand';
+      }
+
+      // ── Open palm → continuous brush painting ──────────────────────────
+      if (pose === 'open') {
+        const sCanvas = stampCanvasRef.current;
+        if (sCanvas) {
+          const sx = (1 - pc.x) * sCanvas.width;
+          const sy = pc.y * sCanvas.height;
+          const prev = prevBrushPalmRef.current[handIdx];
+          if (prev) {
+            const dist = Math.hypot(sx - prev.x, sy - prev.y);
+            if (dist > 2) {
+              const sctx = sCanvas.getContext('2d');
+              sctx.beginPath();
+              sctx.moveTo(prev.x, prev.y);
+              sctx.lineTo(sx, sy);
+              sctx.strokeStyle = selectedColorHexRef.current;
+              sctx.lineWidth   = 16 + Math.random() * 8;   // 16–24px, natural variation
+              sctx.lineCap     = 'round';
+              sctx.lineJoin    = 'round';
+              sctx.globalAlpha = 0.50 + Math.random() * 0.25;
+              sctx.stroke();
+              sctx.globalAlpha = 1;
+            }
+          }
+          prevBrushPalmRef.current[handIdx] = { x: sx, y: sy };
+        }
+        // Count one mark per continuous brush stroke (not every frame)
+        if (!brushCountedRef.current[handIdx]) {
+          brushCountedRef.current[handIdx] = true;
+          stampPosesRef.current.push('open');
+          setStampCount(prev => prev + 1);
+        }
+        // Progress arc: glowing ring to show brush is active
         ctx.beginPath();
-        ctx.strokeStyle = 'rgba(220,190,100,0.9)';
-        ctx.lineWidth = 3;
-        ctx.arc(palmX, palmY, 20, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+        ctx.strokeStyle = 'rgba(180,220,255,0.7)';
+        ctx.lineWidth = 2.5;
+        ctx.arc(palmX, palmY, 18, 0, Math.PI * 2);
         ctx.stroke();
+      } else {
+        // Left open → reset brush state for this hand
+        prevBrushPalmRef.current[handIdx]  = null;
+        brushCountedRef.current[handIdx]   = false;
+      }
+
+      // ── Other poses → hold 1.5 s to stamp ─────────────────────────────
+      if (pose !== 'open') {
+        const now = Date.now();
+        if (pose !== currentPoseRef.current[handIdx]) {
+          currentPoseRef.current[handIdx] = pose;
+          poseStartRef.current[handIdx]   = pose ? now : null;
+          stampCooldownRef.current[handIdx] = false;
+        } else if (
+          pose &&
+          poseStartRef.current[handIdx] &&
+          !stampCooldownRef.current[handIdx] &&
+          now - poseStartRef.current[handIdx] >= 1500
+        ) {
+          doStamp(pose, handIdx);
+        }
+
+        // Progress arc for hold-to-stamp
+        if (pose && poseStartRef.current[handIdx] && !stampCooldownRef.current[handIdx]) {
+          const pct = Math.min((Date.now() - poseStartRef.current[handIdx]) / 1500, 1);
+          ctx.beginPath();
+          ctx.strokeStyle = 'rgba(220,190,100,0.9)';
+          ctx.lineWidth   = 3;
+          ctx.arc(palmX, palmY, 20, -Math.PI / 2, -Math.PI / 2 + pct * Math.PI * 2);
+          ctx.stroke();
+        }
+      } else {
+        // Open palm — reset stamp state for this hand slot
+        currentPoseRef.current[handIdx] = 'open';
+        poseStartRef.current[handIdx]   = null;
       }
 
       // Palm dot
@@ -962,32 +1040,16 @@ function App() {
       ctx.fillStyle = 'rgba(255,220,120,0.75)';
       ctx.arc(palmX, palmY, 5, 0, Math.PI * 2);
       ctx.fill();
-    }
-
-    // Pose state machine
-    if (detectedPose !== currentPoseRef.current) {
-      currentPoseRef.current = detectedPose;
-      poseStartRef.current = detectedPose ? Date.now() : null;
-      // Update pose label (direct DOM, no React re-render)
-      const label = document.getElementById('pose-label');
-      if (label) label.textContent = detectedPose ? POSE_LABELS[detectedPose] || detectedPose : 'show me your hand';
-    } else if (
-      detectedPose &&
-      poseStartRef.current &&
-      !stampCooldownRef.current &&
-      Date.now() - poseStartRef.current >= 1500
-    ) {
-      doStamp(detectedPose);
-    }
+    });
   }
 
   // ── Stamp action ─────────────────────────────────────────────────────────
-  function doStamp(pose) {
-    stampCooldownRef.current = true;
+  function doStamp(pose, handIdx) {
+    stampCooldownRef.current[handIdx] = true;
     const canvas = stampCanvasRef.current;
-    if (!canvas) { stampCooldownRef.current = false; return; }
+    if (!canvas) { stampCooldownRef.current[handIdx] = false; return; }
 
-    const pos = lastPalmRef.current;
+    const pos = lastPalmRef.current[handIdx];
     const x = pos.x * canvas.width;
     const y = pos.y * canvas.height;
     const ctx = canvas.getContext('2d');
@@ -996,10 +1058,10 @@ function App() {
     stampPosesRef.current.push(pose);
     setStampCount(prev => prev + 1);
 
-    // Cooldown: 1s before next stamp
+    // Cooldown: 1s before next stamp from this hand
     setTimeout(() => {
-      stampCooldownRef.current = false;
-      poseStartRef.current = Date.now(); // must re-hold for 1.5s after cooldown
+      stampCooldownRef.current[handIdx] = false;
+      poseStartRef.current[handIdx] = Date.now();
     }, 1000);
   }
 
@@ -1033,7 +1095,7 @@ function App() {
             `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`,
         });
         h.setOptions({
-          maxNumHands: 1,
+          maxNumHands: 2,
           modelComplexity: 1,
           minDetectionConfidence: 0.7,
           minTrackingConfidence: 0.5,
@@ -1064,10 +1126,12 @@ function App() {
   }
 
   function stopGestureMode() {
-    gestureActiveRef.current  = false;
-    currentPoseRef.current    = null;
-    poseStartRef.current      = null;
-    stampCooldownRef.current  = false;
+    gestureActiveRef.current   = false;
+    currentPoseRef.current     = [null, null];
+    poseStartRef.current       = [null, null];
+    stampCooldownRef.current   = [false, false];
+    prevBrushPalmRef.current   = [null, null];
+    brushCountedRef.current    = [false, false];
   }
 
   // ── Color handler ─────────────────────────────────────────────────────────
