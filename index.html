@@ -145,8 +145,17 @@
     }
     @keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
 
-    /* Canvas area */
-    .cv { grid-area: cv; position: relative; background: var(--bg); overflow: hidden; }
+    /* Canvas area — two side-by-side panes */
+    .cv { grid-area: cv; display: flex; flex-direction: row; overflow: hidden; }
+    .cv-pane { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
+    .cv-pane + .cv-pane { border-left: 1px solid var(--border); }
+    .cv-pane-label {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      font-size: 0.55rem; letter-spacing: 0.16em; color: var(--text-muted);
+      text-transform: uppercase; z-index: 5; pointer-events: none;
+      padding: 3px 10px; background: rgba(245,240,232,0.82); border-radius: 8px;
+      white-space: nowrap;
+    }
     .cv canvas { display: block; }
     .cv-toolbar {
       position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
@@ -269,6 +278,26 @@
     }
     .done-btn:hover:not(:disabled) { background: var(--earth-light); box-shadow: 0 0 14px rgba(124,92,191,0.3); }
     .done-btn:disabled { opacity: 0.3; cursor: default; }
+
+    /* Canvas placeholder — shown when idle / color_picked */
+    .canvas-placeholder {
+      position: absolute; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'Cormorant Garamond', serif; font-size: 1rem;
+      font-style: italic; color: var(--text-muted); letter-spacing: 0.04em;
+      pointer-events: none;
+    }
+    /* Generating overlay on user canvas */
+    .canvas-generating {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; background: rgba(245,240,232,0.72); backdrop-filter: blur(3px);
+      font-family: 'Cormorant Garamond', serif; font-size: 1rem;
+      font-style: italic; color: var(--text-muted); letter-spacing: 0.04em;
+      z-index: 10; animation: fadein 0.3s ease;
+    }
+    /* Hide hand pip when not gesturing but keep it in DOM for ref stability */
+    .hand-pip-wrap.pip-hidden { opacity: 0; pointer-events: none; }
 
     /* Hands-loading notice */
     .hands-loading {
@@ -682,10 +711,13 @@ function Sidebar({ selectedColor, onColor, images, isGenerating, sessionActive, 
 }
 
 // ── Gesture Zone component ────────────────────────────────────────────────────
-function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDone }) {
+function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDone,
+                       flowStep, sessionActive }) {
   const containerRef = useRef(null);
+  const isGesturing  = flowStep === 'gesturing';
+  const isGenerating = flowStep === 'generating';
 
-  // Size the stamp canvas to fill container on mount
+  // Size stamp canvas on mount — canvas is always in DOM so this runs once reliably
   useEffect(() => {
     if (!containerRef.current || !stampCanvasRef.current) return;
     const { clientWidth: w, clientHeight: h } = containerRef.current;
@@ -694,37 +726,54 @@ function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDon
     const ctx = stampCanvasRef.current.getContext('2d');
     ctx.fillStyle = '#f9f5ef';
     ctx.fillRect(0, 0, w, h);
-    // Size the hand pip canvas
     if (handPipRef.current) {
       handPipRef.current.width  = 224;
       handPipRef.current.height = 168;
     }
   }, []);
 
+  const placeholder = !sessionActive        ? 'start a session to begin'
+    : flowStep === 'idle'                   ? 'pick a color to start'
+    : flowStep === 'color_picked'           ? 'get ready\u2026'
+    : null;
+
   return html`
     <div className="gesture-zone" ref=${containerRef}>
       <canvas className="stamp-canvas" ref=${stampCanvasRef} />
 
-      <div className="hand-pip-wrap">
+      <div className=${'hand-pip-wrap' + (isGesturing ? '' : ' pip-hidden')}>
         <canvas className="hand-pip-canvas" ref=${handPipRef} />
         <div className="pose-label" id="pose-label">show me your hand</div>
       </div>
 
-      ${!handsReady && html`
+      ${isGesturing && !handsReady && html`
         <div className="hands-loading">
           <div className="hands-spinner" />
-          <span>loading gesture recognition…</span>
+          <span>loading gesture recognition\u2026</span>
         </div>
       `}
 
-      <div className="gesture-footer">
-        <div className="mark-count">
-          ${stampCount > 0 ? `${stampCount} mark${stampCount === 1 ? '' : 's'}` : 'hold a pose to mark'}
+      ${isGesturing && html`
+        <div className="gesture-footer">
+          <div className="mark-count">
+            ${stampCount > 0 ? stampCount + ' mark' + (stampCount === 1 ? '' : 's') : 'hold a pose to mark'}
+          </div>
+          <button className="done-btn" onClick=${onDone} disabled=${stampCount === 0}>
+            done
+          </button>
         </div>
-        <button className="done-btn" onClick=${onDone} disabled=${stampCount === 0}>
-          done
-        </button>
-      </div>
+      `}
+
+      ${isGenerating && html`
+        <div className="canvas-generating">
+          <div className="hands-spinner" />
+          <span>Mix is creating\u2026</span>
+        </div>
+      `}
+
+      ${placeholder && html`
+        <div className="canvas-placeholder">${placeholder}</div>
+      `}
     </div>
   `;
 }
@@ -1160,34 +1209,25 @@ function App() {
     }
 
     // Start gesture mode after a short delay (let Mix acknowledge the color first)
+    // Canvas is always visible now, no resize needed — just start tracking
     setTimeout(() => {
       setFlowStep('gesturing');
-      // Resize stamp canvas now that it's about to become visible
-      if (stampCanvasRef.current && stampCanvasRef.current.parentElement) {
-        const parent = stampCanvasRef.current.closest('.gesture-zone');
-        if (parent) {
-          const w = parent.clientWidth  || window.innerWidth  - 450;
-          const h = parent.clientHeight || window.innerHeight - 128;
-          stampCanvasRef.current.width  = w;
-          stampCanvasRef.current.height = h;
-          const ctx = stampCanvasRef.current.getContext('2d');
-          ctx.fillStyle = '#f9f5ef';
-          ctx.fillRect(0, 0, w, h);
-        }
-      }
       startGestureMode();
     }, 1800);
   }, []);
 
-  // ── Done handler — export stamp canvas → trigger generation ──────────────
+  // ── Done handler — export stamp canvas → clear it → trigger generation ──────
   const handleDone = useCallback(() => {
     stopGestureMode();
     setFlowStep('generating');
 
-    // Export stamp canvas as JPEG
+    // Export stamp canvas as JPEG, then immediately clear it (user's canvas resets)
     let sketchB64 = null;
     if (stampCanvasRef.current) {
       sketchB64 = stampCanvasRef.current.toDataURL('image/jpeg', 0.85).split(',')[1];
+      const ctx = stampCanvasRef.current.getContext('2d');
+      ctx.fillStyle = '#f9f5ef';
+      ctx.fillRect(0, 0, stampCanvasRef.current.width, stampCanvasRef.current.height);
     }
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -1355,8 +1395,6 @@ function App() {
     setTimeout(endSession, 500);
   }, [endSession]);
 
-  const isGesturing = flowStep === 'gesturing';
-
   return html`
     <div className="app-grid">
       <${Header} status=${status} orbState=${orbState} />
@@ -1372,16 +1410,20 @@ function App() {
       />
 
       <main className="cv">
-        <div style=${{ display: isGesturing ? 'block' : 'none', position: 'absolute', inset: 0, zIndex: 2 }}>
+        <div className="cv-pane">
+          <div className="cv-pane-label">you</div>
           <${GestureZone}
             stampCanvasRef=${stampCanvasRef}
             handPipRef=${handPipRef}
             stampCount=${stampCount}
             handsReady=${handsReady}
             onDone=${handleDone}
+            flowStep=${flowStep}
+            sessionActive=${sessionActive}
           />
         </div>
-        <div style=${{ display: isGesturing ? 'none' : 'block', position: 'absolute', inset: 0, zIndex: 1 }}>
+        <div className="cv-pane">
+          <div className="cv-pane-label">mix</div>
           <${CanvasArea}
             fabricRef=${fabricRef}
             isGenerating=${isGenerating}
