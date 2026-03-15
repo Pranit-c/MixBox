@@ -233,11 +233,11 @@
       height: 100%;
     }
 
-    /* Hand PiP — webcam + skeleton, top-right corner */
+    /* Hand PiP — webcam + skeleton, bottom-left corner */
     .hand-pip-wrap {
       position: absolute;
-      top: 14px;
-      right: 14px;
+      bottom: 14px;
+      left: 14px;
       width: 224px;
       border-radius: 14px;
       overflow: hidden;
@@ -759,7 +759,7 @@ function Sidebar({ selectedColor, onColor, images, isGenerating, sessionActive, 
 
 // ── Gesture Zone component ────────────────────────────────────────────────────
 function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDone,
-                       flowStep, sessionActive, pipVideoRef, hasVideo }) {
+                       flowStep, sessionActive }) {
   const containerRef = useRef(null);
   const isGesturing  = flowStep === 'gesturing';
   const isGenerating = flowStep === 'generating';
@@ -787,11 +787,6 @@ function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDon
   return html`
     <div className="gesture-zone" ref=${containerRef}>
       <canvas className="stamp-canvas" ref=${stampCanvasRef} />
-
-      <div className=${['webcam-pip', hasVideo ? 'visible' : ''].filter(Boolean).join(' ')} style=${{ bottom: '14px', top: 'auto', right: 'auto', left: '14px' }}>
-        <video ref=${pipVideoRef} muted playsinline autoplay />
-        <div className="webcam-label">mix is here</div>
-      </div>
 
       <div className=${'hand-pip-wrap' + (isGesturing ? '' : ' pip-hidden')}>
         <canvas className="hand-pip-canvas" ref=${handPipRef} />
@@ -1477,8 +1472,6 @@ function App() {
             onDone=${handleDone}
             flowStep=${flowStep}
             sessionActive=${sessionActive}
-            pipVideoRef=${pipVideoRef}
-            hasVideo=${hasVideo}
           />
         </div>
         <div className="cv-pane">
