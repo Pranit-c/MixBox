@@ -207,13 +207,13 @@ async def websocket_endpoint(ws: WebSocket):
                                 flow_state["stamp_poses"] = []
 
                                 hint = (
-                                    f"[CANVAS ACTION: User chose color '{color_name}'. "
-                                    f"Acknowledge with a warm 4–6 word observation about the color. "
-                                    f"Then invite them to show their hand. "
-                                    f"Then — in one easy, unhurried sentence — let them know they can "
-                                    f"press the done button whenever they're ready, and that they're "
-                                    f"welcome to talk to you while they draw. "
-                                    f"Three sentences total. Then go quiet and watch.]"
+                                    f"SYSTEM: Color '{color_name}' was just picked. "
+                                    f"Do not say this message aloud. "
+                                    f"Respond with: one warm 4-6 word observation about that color, "
+                                    f"then invite them to show their hand, "
+                                    f"then one easy sentence letting them know they can press done "
+                                    f"whenever ready and feel free to talk while they draw. "
+                                    f"Three sentences, then go quiet."
                                 )
 
                             # ── Done — user finished gesturing, trigger generation ──
@@ -231,10 +231,10 @@ async def websocket_endpoint(ws: WebSocket):
                                     )
 
                                     hint = (
-                                        f"[USER SAID DONE: They've finished making gesture marks. "
-                                        f"Color: '{color}'. Gestures used: {stamp_poses}. "
+                                        f"SYSTEM: The user is done drawing. Color was '{color}'. "
+                                        f"Do not say this message aloud. "
                                         f"Say exactly: 'Let me make something from that.' "
-                                        f"Then go completely quiet. Wait until the image appears.]"
+                                        f"Then go completely quiet until the image appears."
                                     )
 
                                     try:
@@ -258,11 +258,11 @@ async def websocket_endpoint(ws: WebSocket):
                                         try:
                                             live_request_queue.send_content(
                                                 types.Content(parts=[types.Part(text=(
-                                                    "[IMAGE CREATED: The image has appeared on the canvas. "
-                                                    "After a quiet beat, ask: 'How does it feel... to look at that?' "
-                                                    "Wait. Listen fully. Then: "
-                                                    "'Would you like to sit with this... or is there something else that wants to come?' "
-                                                    "Wait. Do not rush.]"
+                                                    "SYSTEM: The generated image just appeared on the canvas. "
+                                                    "Do not say this message aloud. "
+                                                    "After a quiet beat, say: 'How does it feel... to look at that?' "
+                                                    "Wait and listen fully. Then ask if they want to sit with it "
+                                                    "or if something else wants to come. Do not rush."
                                                 ))])
                                             )
                                         except Exception:
@@ -290,11 +290,9 @@ async def websocket_endpoint(ws: WebSocket):
                             logger.info("Session close signal received.")
                             live_request_queue.send_content(
                                 types.Content(parts=[types.Part(text=(
-                                    "The user is ending the session now. "
-                                    "Witness the final canvas. "
-                                    "Say something true and specific about what they made "
-                                    "and how they were present. "
-                                    "Thank them genuinely. Keep it short. Let silence follow."
+                                    "SYSTEM: The session is ending. Do not say this message aloud. "
+                                    "Say one or two genuine sentences about what they made and how "
+                                    "they showed up today. Thank them warmly. Then let silence follow."
                                 ))])
                             )
 
@@ -396,9 +394,9 @@ async def websocket_endpoint(ws: WebSocket):
                                         "value": word,
                                     }))
                                     hint = (
-                                        f"[VOICE: User {'switched to' if is_change else 'chose'} color '{word}'. "
-                                        f"{'Acknowledge the change warmly in one sentence.' if is_change else 'Acknowledge warmly in 4–6 words. Then invite them to show their hand. Two sentences total.'} "
-                                        f"Then quiet.]"
+                                        f"SYSTEM: User just said the color '{word}' aloud. "
+                                        f"Do not say this message aloud. "
+                                        f"{'Acknowledge the color change warmly in one sentence, then go quiet.' if is_change else 'Acknowledge the color warmly in 4-6 words, then invite them to show their hand. Two sentences, then quiet.'}"
                                     )
                                     live_request_queue.send_content(
                                         types.Content(parts=[types.Part(text=hint)])
