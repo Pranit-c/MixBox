@@ -48,32 +48,6 @@ from image_architect.client import generate_gesture_image
 # ── Canvas observation nudges — sent periodically while user is drawing ───────
 # These soft prompts fire every ~10s during the gesture phase so Mix can react
 # to what it sees on the canvas in real-time, not just after "done".
-CANVAS_NUDGES = [
-    (
-        "[CANVAS: Look at the canvas right now. You can see the full collage — "
-        "any images already placed in the puzzle, and the marks being made now. "
-        "If something in what you see moves you, say one present-tense observation. "
-        "You can reference what's already there AND what's being added. "
-        "One short sentence, or stay quiet. No completion language.]"
-    ),
-    (
-        "[CANVAS: You're watching the collage grow. Look at what's already in the puzzle "
-        "and what the person is creating right now. If a color, a shape, or a connection "
-        "between the pieces speaks to you, say one quiet thing. Present tense only. "
-        "Or stay silent and hold the space.]"
-    ),
-    (
-        "[CANVAS: The collage is taking shape — piece by piece. Look at the whole canvas: "
-        "what's been made, what's being made now. If something catches you — a recurring color, "
-        "a mood, a quality — say one soft thing about what you notice. Or say nothing.]"
-    ),
-    (
-        "[CANVAS: Look at what's there. The puzzle is filling in. "
-        "If the image you see — the pieces placed, the marks being added — moves you, "
-        "reflect one thing back simply and gently. Stay in the present moment. Or hold the quiet.]"
-    ),
-]
-CANVAS_NUDGE_INTERVAL = 10.0  # seconds between nudges
 
 # ── Voice keyword maps ────────────────────────────────────────────────────────
 VOICE_COLORS = {
@@ -117,7 +91,7 @@ run_config = RunConfig(
     speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Aoede"   # warm, natural female voice
+                voice_name="Kore"    # calm, even female voice
             )
         )
     ),
@@ -162,7 +136,6 @@ async def websocket_endpoint(ws: WebSocket):
         "stamp_poses":       [],     # list of gesture poses user made (e.g. ["open","fist"])
         "voice_transcript":  "",     # accumulated user speech this session
         "generating":        False,  # True while image is in-flight
-        "last_canvas_nudge": 0.0,    # monotonic time of last canvas observation nudge
     }
 
     # Wake Mix
@@ -215,22 +188,8 @@ async def websocket_endpoint(ws: WebSocket):
                                     data=image_bytes,
                                 )
                             )
-                            # While the user is actively drawing, nudge Mix every
-                            # ~10s so it reacts to the canvas in real-time rather
-                            # than only responding when explicitly triggered.
-                            if (
-                                flow_state["color"]
-                                and not flow_state["generating"]
-                                and (time.monotonic() - flow_state["last_canvas_nudge"])
-                                    > CANVAS_NUDGE_INTERVAL
-                            ):
-                                flow_state["last_canvas_nudge"] = time.monotonic()
-                                try:
-                                    live_request_queue.send_content(
-                                        types.Content(parts=[types.Part(text=random.choice(CANVAS_NUDGES))])
-                                    )
-                                except Exception as e:
-                                    logger.warning(f"Canvas nudge failed: {e}")
+                            # Canvas frames are sent as passive visual context only.
+                            # Mix speaks when the user speaks, or when an image is generated.
 
                         # ── Canvas actions ────────────────────────────────────
                         elif msg_type == "canvas_action":
