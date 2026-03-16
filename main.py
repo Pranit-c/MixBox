@@ -28,6 +28,8 @@ import base64
 import json
 import logging
 import os
+import random
+import time
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -42,6 +44,32 @@ from google.genai import types
 
 from mix_agent.agent import root_agent
 from image_architect.client import generate_gesture_image
+
+# ── Canvas observation nudges — sent periodically while user is drawing ───────
+# These soft prompts fire every ~10s during the gesture phase so Mix can react
+# to what it sees on the canvas in real-time, not just after "done".
+CANVAS_NUDGES = [
+    (
+        "[CANVAS: You can see what's being created right now. "
+        "If something in the image moves you, say one soft thing — "
+        "a single short observation, nothing more. Or stay quiet.]"
+    ),
+    (
+        "[CANVAS: Watch what's taking shape on the canvas. "
+        "If you notice something worth saying, say it in one quiet sentence. "
+        "Or stay present in silence.]"
+    ),
+    (
+        "[CANVAS: The person is drawing. Look at what they're making. "
+        "One soft observation if it feels right — then quiet again.]"
+    ),
+    (
+        "[CANVAS: You are watching someone create. "
+        "If the image moves you, reflect it back in a single short phrase. "
+        "Otherwise, hold the silence.]"
+    ),
+]
+CANVAS_NUDGE_INTERVAL = 10.0  # seconds between nudges
 
 # ── Voice keyword maps ────────────────────────────────────────────────────────
 VOICE_COLORS = {
@@ -128,10 +156,11 @@ async def websocket_endpoint(ws: WebSocket):
     # ── Flow state — tracks the creative ritual ────────────────────────────────
     # breath → color → gesture (stamp marks) → done → image → reflection
     flow_state = {
-        "color":            "",     # color name picked
-        "stamp_poses":      [],     # list of gesture poses user made (e.g. ["open","fist"])
-        "voice_transcript": "",     # accumulated user speech this session
-        "generating":       False,  # True while image is in-flight
+        "color":             "",     # color name picked
+        "stamp_poses":       [],     # list of gesture poses user made (e.g. ["open","fist"])
+        "voice_transcript":  "",     # accumulated user speech this session
+        "generating":        False,  # True while image is in-flight
+        "last_canvas_nudge": 0.0,    # monotonic time of last canvas observation nudge
     }
 
     # Wake Mix
@@ -184,6 +213,22 @@ async def websocket_endpoint(ws: WebSocket):
                                     data=image_bytes,
                                 )
                             )
+                            # While the user is actively drawing, nudge Mix every
+                            # ~10s so it reacts to the canvas in real-time rather
+                            # than only responding when explicitly triggered.
+                            if (
+                                flow_state["color"]
+                                and not flow_state["generating"]
+                                and (time.monotonic() - flow_state["last_canvas_nudge"])
+                                    > CANVAS_NUDGE_INTERVAL
+                            ):
+                                flow_state["last_canvas_nudge"] = time.monotonic()
+                                try:
+                                    live_request_queue.send_content(
+                                        types.Content(parts=[types.Part(text=random.choice(CANVAS_NUDGES))])
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"Canvas nudge failed: {e}")
 
                         # ── Canvas actions ────────────────────────────────────
                         elif msg_type == "canvas_action":

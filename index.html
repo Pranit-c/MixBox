@@ -1096,6 +1096,7 @@ function drawJigsawOutlines(fc, jState) {
 }
 
 // Place the next generated image into the next empty jigsaw slot.
+// Animates in with a pop (easeOutBack): arrives at 1.2× scale, snaps to 1×.
 // Falls back to free placement if puzzle is full.
 function addToJigsawSlot(fc, src, jState) {
   if (!fc || !jState || jState.nextSlot >= jState.pieces.length) {
@@ -1106,20 +1107,55 @@ function addToJigsawSlot(fc, src, jState) {
   fabric.Image.fromURL(src, (img) => {
     if (!img || !img.width) return;
     const scaleX = piece.cellW / img.width, scaleY = piece.cellH / img.height;
-    const scale  = Math.max(scaleX, scaleY) * 1.04; // slight overfill so edges clip cleanly
+    const scale  = Math.max(scaleX, scaleY) * 1.04; // overfill so clip edges stay clean
+    const pop    = scale * 1.20;                     // starting scale for pop-in
+    const cx     = piece.x + piece.cellW / 2;
+    const cy     = piece.y + piece.cellH / 2;
+
     img.set({
-      left:      piece.x + piece.cellW / 2 - (img.width  * scale) / 2,
-      top:       piece.y + piece.cellH / 2 - (img.height * scale) / 2,
-      scaleX:    scale, scaleY: scale, angle: 0,
+      left:      cx - (img.width  * pop) / 2,
+      top:       cy - (img.height * pop) / 2,
+      scaleX:    pop, scaleY: pop,
+      angle:     0, opacity: 0,
       selectable: false, evented: false,
       clipPath:  new fabric.Path(piece.pathData, { absolutePositioned: true }),
-      shadow:    new fabric.Shadow({ color: 'rgba(40,25,10,0.30)', blur: 24, offsetX: 4, offsetY: 6 }),
+      shadow:    new fabric.Shadow({ color: 'rgba(40,25,10,0.32)', blur: 26, offsetX: 4, offsetY: 7 }),
     });
-    // Fade the outline once filled
+
+    // Flash outline gold to signal something arriving
     const outline = fc.getObjects().find(o => o._jigsawIdx === piece.idx);
-    if (outline) { outline.set({ fill: 'transparent', stroke: 'rgba(100,72,38,0.12)' }); }
+    if (outline) outline.set({ stroke: 'rgba(190, 140, 55, 0.95)', strokeWidth: 5 });
+
     fc.add(img);
     fc.renderAll();
+
+    // Pop: scale pop → scale with easeOutBack (slight overshoot snap)
+    // opacity 0 → 1 in first half so the piece materialises as it snaps in
+    fabric.util.animate({
+      startValue: 0,
+      endValue:   1,
+      duration:   680,
+      easing:     fabric.util.ease.easeOutBack,
+      onChange: (v) => {
+        const sc = pop + (scale - pop) * v;   // pop (large) → scale (target)
+        img.set({
+          opacity: Math.min(1, v * 2),         // fully opaque by v = 0.5
+          scaleX:  sc, scaleY: sc,
+          left:    cx - (img.width  * sc) / 2,
+          top:     cy - (img.height * sc) / 2,
+        });
+        fc.renderAll();
+      },
+      onComplete: () => {
+        img.set({
+          opacity: 1, scaleX: scale, scaleY: scale,
+          left: cx - (img.width  * scale) / 2,
+          top:  cy - (img.height * scale) / 2,
+        });
+        if (outline) outline.set({ fill: 'transparent', stroke: 'rgba(100,72,38,0.12)', strokeWidth: 2.5 });
+        fc.renderAll();
+      },
+    });
   }, opts);
 }
 
