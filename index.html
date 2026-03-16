@@ -167,6 +167,7 @@
     .cv { grid-area: cv; display: flex; flex-direction: row; overflow: hidden; }
     .cv-pane { flex: 1; position: relative; overflow: hidden; background: var(--bg); }
     .cv-pane + .cv-pane { border-left: 1px solid var(--border); }
+    .mix-pane { background: #ede0c8; }
     .cv-pane-label {
       position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
       font-size: 0.55rem; letter-spacing: 0.16em; color: var(--text-muted);
@@ -826,7 +827,7 @@ function GestureZone({ stampCanvasRef, handPipRef, stampCount, handsReady, onDon
 }
 
 // ── Canvas Area (Fabric.js collage) ──────────────────────────────────────────
-function CanvasArea({ fabricRef, isGenerating }) {
+function CanvasArea({ fabricRef, jigsawRef, onClear, isGenerating }) {
   const containerRef = useRef(null);
   const canvasElRef  = useRef(null);
 
@@ -837,9 +838,15 @@ function CanvasArea({ fabricRef, isGenerating }) {
     canvasElRef.current.width  = w;
     canvasElRef.current.height = h;
     const fc = new fabric.Canvas(canvasElRef.current, {
-      width: w, height: h, backgroundColor: '#f9f5ef', selection: true,
+      width: w, height: h, backgroundColor: '#ede0c8', selection: true,
     });
     fabricRef.current = fc;
+
+    // Build jigsaw puzzle grid and draw empty outlines
+    const jState = buildJigsawPieces(w, h);
+    if (jigsawRef) jigsawRef.current = jState;
+    drawJigsawOutlines(fc, jState);
+
     const upper = fc.upperCanvasEl;
     upper.addEventListener('dragover', (e) => e.preventDefault());
     upper.addEventListener('drop', (e) => {
@@ -855,7 +862,7 @@ function CanvasArea({ fabricRef, isGenerating }) {
   }, []);
 
   const remove  = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { fc.remove(o); fc.renderAll(); } };
-  const clear   = () => { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#f9f5ef'; fc.renderAll(); };
+  const clear   = () => { if (onClear) { onClear(); } else { const fc = fabricRef.current; if (!fc) return; fc.clear(); fc.backgroundColor = '#ede0c8'; fc.renderAll(); } };
   const rotateL = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle||0)-15); fc.renderAll(); } };
   const rotateR = () => { const fc = fabricRef.current; if (!fc) return; const o = fc.getActiveObject(); if (o) { o.rotate((o.angle||0)+15); fc.renderAll(); } };
   const save    = () => {
@@ -933,6 +940,125 @@ function CloseOverlay({ message, onSave, onEnd }) {
   `;
 }
 
+// ── Jigsaw puzzle engine ──────────────────────────────────────────────────────
+const JIGSAW_COLS = 3, JIGSAW_ROWS = 3;
+
+// Horizontal edge: from (x1,y1) to (x2,y2). dir=1 tab protrudes in -y (outward for top),
+// dir=-1 blank indents in +y. Handles both left→right and right→left travel.
+function _jtabH(x1, y1, x2, y2, dir, ts, hw) {
+  if (!dir) return 'L ' + x2 + ' ' + y2;
+  const mx = (x1 + x2) / 2, dy = -dir * ts, goR = x2 > x1;
+  const near = goR ? mx - hw : mx + hw;
+  const far  = goR ? mx + hw : mx - hw;
+  const sign = goR ? 1 : -1;
+  return (
+    'L ' + near + ' ' + y1 + ' ' +
+    'C ' + near + ' ' + (y1 + dy * 0.6) + ',' + (mx - sign * hw * 0.3) + ' ' + (y1 + dy) + ',' + mx + ' ' + (y1 + dy) + ' ' +
+    'C ' + (mx + sign * hw * 0.3) + ' ' + (y1 + dy) + ',' + far + ' ' + (y1 + dy * 0.6) + ',' + far + ' ' + y1 + ' ' +
+    'L ' + x2 + ' ' + y2
+  );
+}
+
+// Vertical edge: from (x1,y1) to (x2,y2). dir=1 tab protrudes in +x (outward for right),
+// dir=-1 blank. Handles both top→bottom and bottom→top travel.
+function _jtabV(x1, y1, x2, y2, dir, ts, hw) {
+  if (!dir) return 'L ' + x2 + ' ' + y2;
+  const my = (y1 + y2) / 2, dx = dir * ts, goD = y2 > y1;
+  const near = goD ? my - hw : my + hw;
+  const far  = goD ? my + hw : my - hw;
+  const sign = goD ? 1 : -1;
+  return (
+    'L ' + x1 + ' ' + near + ' ' +
+    'C ' + (x1 + dx * 0.6) + ' ' + near + ',' + (x1 + dx) + ' ' + (my - sign * hw * 0.3) + ',' + (x1 + dx) + ' ' + my + ' ' +
+    'C ' + (x1 + dx) + ' ' + (my + sign * hw * 0.3) + ',' + (x1 + dx * 0.6) + ' ' + far + ',' + x1 + ' ' + far + ' ' +
+    'L ' + x2 + ' ' + y2
+  );
+}
+
+// Build the complete SVG path for one jigsaw piece.
+// conn = { top, right, bottom, left } each 0 | 1 | -1
+function makeJigsawPath(x, y, w, h, conn) {
+  const s = Math.min(w, h), ts = s * 0.22, hw = s * 0.18;
+  let d = 'M ' + x + ' ' + y;
+  d += _jtabH(x,     y,     x + w, y,     conn.top,          ts, hw); // top: L→R
+  d += _jtabV(x + w, y,     x + w, y + h, conn.right,         ts, hw); // right: T→B
+  d += _jtabH(x + w, y + h, x,     y + h, -conn.bottom,       ts, hw); // bottom: R→L (flip)
+  d += _jtabV(x,     y + h, x,     y,     -conn.left,         ts, hw); // left: B→T (flip)
+  return d + ' Z';
+}
+
+// Generate all JIGSAW_ROWS×JIGSAW_COLS piece definitions for a given canvas size.
+function buildJigsawPieces(cW, cH) {
+  const cellW = cW / JIGSAW_COLS, cellH = cH / JIGSAW_ROWS;
+  let seed = 42;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) & 0x7fffffff; return seed & 1 ? 1 : -1; };
+  // hc[r][c] = connector between row r and r+1 at col c
+  const hc = Array.from({ length: JIGSAW_ROWS - 1 }, () => Array.from({ length: JIGSAW_COLS }, rnd));
+  // vc[r][c] = connector between col c and c+1 at row r
+  const vc = Array.from({ length: JIGSAW_ROWS }, () => Array.from({ length: JIGSAW_COLS - 1 }, rnd));
+  const pieces = [];
+  for (let r = 0; r < JIGSAW_ROWS; r++) {
+    for (let c = 0; c < JIGSAW_COLS; c++) {
+      const conn = {
+        top:    r === 0             ? 0 : -hc[r - 1][c],
+        bottom: r === JIGSAW_ROWS - 1 ? 0 :  hc[r][c],
+        left:   c === 0             ? 0 : -vc[r][c - 1],
+        right:  c === JIGSAW_COLS - 1 ? 0 :  vc[r][c],
+      };
+      const px = c * cellW, py = r * cellH;
+      pieces.push({
+        idx: r * JIGSAW_COLS + c,
+        x: px, y: py, cellW, cellH, conn,
+        pathData: makeJigsawPath(px, py, cellW, cellH, conn),
+      });
+    }
+  }
+  return { pieces, nextSlot: 0, cellW, cellH };
+}
+
+// Draw the empty piece outlines onto a fabric canvas.
+function drawJigsawOutlines(fc, jState) {
+  jState.pieces.forEach(piece => {
+    const outline = new fabric.Path(piece.pathData, {
+      fill: 'rgba(220, 200, 165, 0.42)',
+      stroke: 'rgba(135, 100, 58, 0.45)',
+      strokeWidth: 2.5,
+      selectable: false, evented: false, hoverCursor: 'default',
+    });
+    outline._jigsawIdx = piece.idx;
+    fc.add(outline);
+  });
+  fc.renderAll();
+}
+
+// Place the next generated image into the next empty jigsaw slot.
+// Falls back to free placement if puzzle is full.
+function addToJigsawSlot(fc, src, jState) {
+  if (!fc || !jState || jState.nextSlot >= jState.pieces.length) {
+    addToFabric(fc, src); return;
+  }
+  const piece = jState.pieces[jState.nextSlot++];
+  const opts = src.startsWith('data:') ? {} : { crossOrigin: 'anonymous' };
+  fabric.Image.fromURL(src, (img) => {
+    if (!img || !img.width) return;
+    const scaleX = piece.cellW / img.width, scaleY = piece.cellH / img.height;
+    const scale  = Math.max(scaleX, scaleY) * 1.04; // slight overfill so edges clip cleanly
+    img.set({
+      left:      piece.x + piece.cellW / 2 - (img.width  * scale) / 2,
+      top:       piece.y + piece.cellH / 2 - (img.height * scale) / 2,
+      scaleX:    scale, scaleY: scale, angle: 0,
+      selectable: false, evented: false,
+      clipPath:  new fabric.Path(piece.pathData, { absolutePositioned: true }),
+      shadow:    new fabric.Shadow({ color: 'rgba(40,25,10,0.30)', blur: 24, offsetX: 4, offsetY: 6 }),
+    });
+    // Fade the outline once filled
+    const outline = fc.getObjects().find(o => o._jigsawIdx === piece.idx);
+    if (outline) { outline.set({ fill: 'transparent', stroke: 'rgba(100,72,38,0.12)' }); }
+    fc.add(img);
+    fc.renderAll();
+  }, opts);
+}
+
 // ── Fabric helper ─────────────────────────────────────────────────────────────
 function addToFabric(fc, src, x, y) {
   if (!fc) return;
@@ -979,6 +1105,7 @@ function App() {
   // Core refs
   const wsRef            = useRef(null);
   const fabricRef        = useRef(null);
+  const jigsawRef        = useRef(null);
   const mediaStreamRef   = useRef(null);
   const processorRef     = useRef(null);
   const canvasIntervalRef = useRef(null);
@@ -1300,6 +1427,19 @@ function App() {
     addToFabric(fabricRef.current, src);
   }, []);
 
+  const clearMixCanvas = useCallback(() => {
+    const fc = fabricRef.current;
+    const jState = jigsawRef.current;
+    if (!fc) return;
+    fc.clear();
+    fc.backgroundColor = '#ede0c8';
+    if (jState) {
+      jState.nextSlot = 0;
+      drawJigsawOutlines(fc, jState);
+    }
+    fc.renderAll();
+  }, []);
+
   // ── Start session ─────────────────────────────────────────────────────────
   const startSession = useCallback(async () => {
     setStatus('requesting mic & camera\u2026');
@@ -1395,7 +1535,7 @@ function App() {
           setSelectedColor(null);
           const src = msg.url || 'data:image/jpeg;base64,' + msg.data;
           setImages(prev => [{ id: Date.now() + Math.random(), src }, ...prev]);
-          addToFabric(fabricRef.current, src);
+          addToJigsawSlot(fabricRef.current, src, jigsawRef.current);
           setStatus('image added');
           setTimeout(() => setStatus(''), 2500);
         }
@@ -1474,10 +1614,12 @@ function App() {
             sessionActive=${sessionActive}
           />
         </div>
-        <div className="cv-pane">
+        <div className="cv-pane mix-pane">
           <div className="cv-pane-label">mix</div>
           <${CanvasArea}
             fabricRef=${fabricRef}
+            jigsawRef=${jigsawRef}
+            onClear=${clearMixCanvas}
             isGenerating=${isGenerating}
           />
         </div>
