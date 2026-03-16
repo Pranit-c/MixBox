@@ -1623,6 +1623,9 @@ function App() {
         if (msg.transcript) setTranscript(msg.transcript);
 
         // Voice selected a color
+        // User said "I'm done" by voice — trigger image generation
+        if (msg.type === 'voice_done') { handleDone(); return; }
+
         // Mix was interrupted — stop playing immediately
         if (msg.type === 'interrupted') {
           _playbackQueue = [];

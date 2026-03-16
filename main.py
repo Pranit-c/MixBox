@@ -57,6 +57,14 @@ VOICE_COLORS = {
     'black': '#2a2520', 'white': '#f5f0e8', 'gold': '#c9a840',
 }
 
+# Phrases that signal the user is done drawing and wants an image generated
+VOICE_DONE_PHRASES = [
+    "i'm done", "im done", "i am done",
+    "i'm finished", "im finished", "i am finished",
+    "that's it", "thats it", "that is it",
+    "all done", "done drawing", "finished drawing",
+]
+
 load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -361,25 +369,39 @@ async def websocket_endpoint(ws: WebSocket):
                     ]
                     phrase = user_text.lower()
 
-                    # ── Auto-select color by voice (before color is set) ──────
-                    if not flow_state["color"] and not flow_state["generating"]:
+                    # ── Voice "done" — trigger image generation ───────────────
+                    if (
+                        flow_state["color"]
+                        and not flow_state["generating"]
+                        and any(p in phrase for p in VOICE_DONE_PHRASES)
+                    ):
+                        logger.info("Voice done detected")
+                        flow_state["generating"] = True
+                        try:
+                            await ws.send_text(json.dumps({"type": "voice_done"}))
+                        except Exception as e:
+                            logger.warning(f"Voice done signal error: {e}")
+
+                    # ── Voice color — initial pick or mid-session change ───────
+                    elif not flow_state["generating"]:
                         for word in words:
                             if word in VOICE_COLORS:
+                                is_change = bool(flow_state["color"])
                                 flow_state["color"] = word
-                                logger.info(f"Voice color detected: {word}")
+                                logger.info(f"Voice color {'changed' if is_change else 'selected'}: {word}")
                                 try:
                                     await ws.send_text(json.dumps({
                                         "type": "voice_select",
                                         "kind": "color",
                                         "value": word,
                                     }))
+                                    hint = (
+                                        f"[VOICE: User {'switched to' if is_change else 'chose'} color '{word}'. "
+                                        f"{'Acknowledge the change warmly in one sentence.' if is_change else 'Acknowledge warmly in 4–6 words. Then invite them to show their hand. Two sentences total.'} "
+                                        f"Then quiet.]"
+                                    )
                                     live_request_queue.send_content(
-                                        types.Content(parts=[types.Part(text=(
-                                            f"[VOICE: User chose color '{word}' by speaking. "
-                                            f"Acknowledge warmly in 4–6 words. "
-                                            f"Then invite them to show their hand. "
-                                            f"Two sentences total. Then quiet.]"
-                                        ))])
+                                        types.Content(parts=[types.Part(text=hint)])
                                     )
                                 except Exception as e:
                                     logger.warning(f"Voice color select error: {e}")
