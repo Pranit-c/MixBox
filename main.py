@@ -50,28 +50,27 @@ from image_architect.client import generate_gesture_image
 # to what it sees on the canvas in real-time, not just after "done".
 CANVAS_NUDGES = [
     (
-        "[CANVAS: The person is still drawing right now — they have NOT finished. "
-        "Look at the canvas. If something in what you see moves you, say one present-tense "
-        "observation — about a color, a mark, a quality you notice. "
-        "Do NOT use words like 'arriving', 'done', 'ready', or anything that hints at finishing. "
-        "One short sentence, or stay quiet.]"
+        "[CANVAS: Look at the canvas right now. You can see the full collage — "
+        "any images already placed in the puzzle, and the marks being made now. "
+        "If something in what you see moves you, say one present-tense observation. "
+        "You can reference what's already there AND what's being added. "
+        "One short sentence, or stay quiet. No completion language.]"
     ),
     (
-        "[CANVAS: You're watching someone create in this moment. "
-        "If you see something worth naming, say it simply — one quiet sentence about what you notice. "
-        "Stay in the present. Do not hint at completion or the image being done. "
-        "Or stay silent and just be present.]"
+        "[CANVAS: You're watching the collage grow. Look at what's already in the puzzle "
+        "and what the person is creating right now. If a color, a shape, or a connection "
+        "between the pieces speaks to you, say one quiet thing. Present tense only. "
+        "Or stay silent and hold the space.]"
     ),
     (
-        "[CANVAS: The person is actively making marks right now. "
-        "Look at what's on the canvas — the colors, the gestures, the shapes taking form. "
-        "If something catches you, say one soft thing about what you see. "
-        "Present tense only. No completion language. Or hold the quiet.]"
+        "[CANVAS: The collage is taking shape — piece by piece. Look at the whole canvas: "
+        "what's been made, what's being made now. If something catches you — a recurring color, "
+        "a mood, a quality — say one soft thing about what you notice. Or say nothing.]"
     ),
     (
-        "[CANVAS: Watch what they're making. Still in process — not done yet. "
-        "If the canvas speaks to you, reflect one thing back — simply, gently. "
-        "Keep it in the present moment. Or say nothing at all.]"
+        "[CANVAS: Look at what's there. The puzzle is filling in. "
+        "If the image you see — the pieces placed, the marks being added — moves you, "
+        "reflect one thing back simply and gently. Stay in the present moment. Or hold the quiet.]"
     ),
 ]
 CANVAS_NUDGE_INTERVAL = 10.0  # seconds between nudges
@@ -82,22 +81,6 @@ VOICE_COLORS = {
     'yellow': '#dbb84a', 'orange': '#d4783c', 'red': '#c24a3c',
     'pink': '#cc7a90', 'purple': '#7c5cbf', 'brown': '#7c5a3c',
     'black': '#2a2520', 'white': '#f5f0e8', 'gold': '#c9a840',
-}
-# Words/phrases that trigger "done" — user has finished making gesture marks.
-# Single-word set checked against tokenised words (apostrophes stripped).
-VOICE_DONE_WORDS = {'done', 'finished', 'complete', 'ready', 'enough'}
-# Phrase fragments checked against the full lowercased transcript line.
-# Covers contractions before and after apostrophe-stripping.
-VOICE_DONE_PHRASES = {
-    "that's it", "thats it",
-    "i'm done", "im done",
-    "i am done",
-    "i'm finished", "im finished",
-    "i am finished",
-    "all done",
-    "i'm ready", "im ready",
-    "i am ready",
-    "that's enough", "thats enough",
 }
 
 load_dotenv()
@@ -264,9 +247,12 @@ async def websocket_endpoint(ws: WebSocket):
 
                                 hint = (
                                     f"[CANVAS ACTION: User chose color '{color_name}'. "
-                                    f"Acknowledge with a warm 4–6 word observation. "
-                                    f"Then say: 'Now show me your hand... make shapes with your fingers.' "
-                                    f"Two sentences. Then go quiet and watch as they create.]"
+                                    f"Acknowledge with a warm 4–6 word observation about the color. "
+                                    f"Then invite them to show their hand. "
+                                    f"Then — in one easy, unhurried sentence — let them know they can "
+                                    f"press the done button whenever they're ready, and that they're "
+                                    f"welcome to talk to you while they draw. "
+                                    f"Three sentences total. Then go quiet and watch.]"
                                 )
 
                             # ── Done — user finished gesturing, trigger generation ──
@@ -441,23 +427,6 @@ async def websocket_endpoint(ws: WebSocket):
                                     logger.warning(f"Voice color select error: {e}")
                                 break
 
-                    # ── "Done" by voice — user finished gesturing ─────────────
-                    elif (
-                        flow_state["color"]
-                        and not flow_state["generating"]
-                    ):
-                        # Check tokenised words (apostrophes already stripped)
-                        # and full phrase (handles contractions both ways)
-                        done_detected = (
-                            any(w in VOICE_DONE_WORDS for w in words)
-                            or any(p in phrase for p in VOICE_DONE_PHRASES)
-                        )
-                        if done_detected:
-                            logger.info(f"Voice 'done' detected in: {user_text!r}")
-                            try:
-                                await ws.send_text(json.dumps({"type": "voice_done"}))
-                            except Exception as e:
-                                logger.warning(f"Voice done signal error: {e}")
 
         except Exception as e:
             logger.error(f"Downstream error: {e}")
