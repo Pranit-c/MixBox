@@ -50,23 +50,28 @@ from image_architect.client import generate_gesture_image
 # to what it sees on the canvas in real-time, not just after "done".
 CANVAS_NUDGES = [
     (
-        "[CANVAS: You can see what's being created right now. "
-        "If something in the image moves you, say one soft thing — "
-        "a single short observation, nothing more. Or stay quiet.]"
+        "[CANVAS: The person is still drawing right now — they have NOT finished. "
+        "Look at the canvas. If something in what you see moves you, say one present-tense "
+        "observation — about a color, a mark, a quality you notice. "
+        "Do NOT use words like 'arriving', 'done', 'ready', or anything that hints at finishing. "
+        "One short sentence, or stay quiet.]"
     ),
     (
-        "[CANVAS: Watch what's taking shape on the canvas. "
-        "If you notice something worth saying, say it in one quiet sentence. "
-        "Or stay present in silence.]"
+        "[CANVAS: You're watching someone create in this moment. "
+        "If you see something worth naming, say it simply — one quiet sentence about what you notice. "
+        "Stay in the present. Do not hint at completion or the image being done. "
+        "Or stay silent and just be present.]"
     ),
     (
-        "[CANVAS: The person is drawing. Look at what they're making. "
-        "One soft observation if it feels right — then quiet again.]"
+        "[CANVAS: The person is actively making marks right now. "
+        "Look at what's on the canvas — the colors, the gestures, the shapes taking form. "
+        "If something catches you, say one soft thing about what you see. "
+        "Present tense only. No completion language. Or hold the quiet.]"
     ),
     (
-        "[CANVAS: You are watching someone create. "
-        "If the image moves you, reflect it back in a single short phrase. "
-        "Otherwise, hold the silence.]"
+        "[CANVAS: Watch what they're making. Still in process — not done yet. "
+        "If the canvas speaks to you, reflect one thing back — simply, gently. "
+        "Keep it in the present moment. Or say nothing at all.]"
     ),
 ]
 CANVAS_NUDGE_INTERVAL = 10.0  # seconds between nudges
@@ -78,8 +83,22 @@ VOICE_COLORS = {
     'pink': '#cc7a90', 'purple': '#7c5cbf', 'brown': '#7c5a3c',
     'black': '#2a2520', 'white': '#f5f0e8', 'gold': '#c9a840',
 }
-# Words that trigger "done" — user has finished making gesture marks
-VOICE_DONE = {'done', 'finished', 'complete', "that's it", 'ready', 'enough'}
+# Words/phrases that trigger "done" — user has finished making gesture marks.
+# Single-word set checked against tokenised words (apostrophes stripped).
+VOICE_DONE_WORDS = {'done', 'finished', 'complete', 'ready', 'enough'}
+# Phrase fragments checked against the full lowercased transcript line.
+# Covers contractions before and after apostrophe-stripping.
+VOICE_DONE_PHRASES = {
+    "that's it", "thats it",
+    "i'm done", "im done",
+    "i am done",
+    "i'm finished", "im finished",
+    "i am finished",
+    "all done",
+    "i'm ready", "im ready",
+    "i am ready",
+    "that's enough", "thats enough",
+}
 
 load_dotenv()
 
@@ -115,7 +134,7 @@ run_config = RunConfig(
     speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Zephyr"  # warm, bright, gentle voice
+                voice_name="Aoede"   # warm, expressive, gentle voice
             )
         )
     ),
@@ -427,10 +446,14 @@ async def websocket_endpoint(ws: WebSocket):
                         flow_state["color"]
                         and not flow_state["generating"]
                     ):
-                        done_detected = any(w in VOICE_DONE for w in words) or \
-                                        any(d in phrase for d in ["that's it", "i'm done", "i am done"])
+                        # Check tokenised words (apostrophes already stripped)
+                        # and full phrase (handles contractions both ways)
+                        done_detected = (
+                            any(w in VOICE_DONE_WORDS for w in words)
+                            or any(p in phrase for p in VOICE_DONE_PHRASES)
+                        )
                         if done_detected:
-                            logger.info("Voice 'done' detected — triggering generation")
+                            logger.info(f"Voice 'done' detected in: {user_text!r}")
                             try:
                                 await ws.send_text(json.dumps({"type": "voice_done"}))
                             except Exception as e:
