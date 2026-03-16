@@ -161,10 +161,94 @@ Selecting a color or shape sends a `canvas_action` WebSocket message to the serv
 
 ---
 
+## Reproducible Testing
+
+### Requirements
+
+- Python 3.11+
+- A Google Cloud project with the following APIs enabled:
+  - Vertex AI (`aiplatform.googleapis.com`)
+  - Imagen (`imagegeneration.googleapis.com`)
+  - Cloud Run (`run.googleapis.com`)
+- `gcloud` CLI authenticated: `gcloud auth application-default login`
+- A browser with microphone access (Chrome recommended)
+
+### Option A — Run locally (fastest)
+
+**Step 1: Clone and configure**
+
+```bash
+git clone https://github.com/pranitchand/mixbox.git
+cd mixbox/backend
+cp .env.example .env
+# Edit .env and set GOOGLE_CLOUD_PROJECT to your GCP project ID
+```
+
+**Step 2: Start the Image Architect service**
+
+```bash
+cd image_architect
+pip install -r requirements.txt
+python server.py
+# Running on http://localhost:8081
+```
+
+**Step 3: Start the main service**
+
+```bash
+cd ..
+pip install -r requirements.txt
+uvicorn main:app --host 0.0.0.0 --port 8080 --reload
+```
+
+**Step 4: Open the app**
+
+Navigate to `http://localhost:8080` in Chrome. Grant microphone and camera permissions when prompted.
+
+---
+
+### Option B — Deploy to Cloud Run
+
+```bash
+chmod +x deploy.sh
+./deploy.sh
+```
+
+The script deploys the Architect first, captures its URL, then injects it as `ARCHITECT_URL` into the main service. Both services will be live on Cloud Run within ~3 minutes. The final URL is printed at the end of the script.
+
+---
+
+### End-to-end test flow
+
+Once the app is running, walk through this sequence to verify all systems:
+
+1. **Click "start session"** — Mix should greet you within 2–3 seconds: *"Hi... how are you feeling today?"*
+2. **Respond verbally** — say anything; Mix should respond to what you actually said
+3. **Pick a color** from the palette — Mix should acknowledge it with a warm 4–6 word observation
+4. **Hold a hand gesture** in front of the camera (fist, point, peace sign, or pinch) for 1.5 seconds — a stamp mark should appear on the canvas
+5. **Click the done button** (or say *"I'm done"*) — Mix should say *"I'll create something for you"* and a spinner should appear
+6. **Wait ~10–15 seconds** — a generated image should snap into the first jigsaw slot on the canvas
+7. **Mix should respond** to the image with *"How does it feel... to look at that?"*
+8. **Talk to Mix** about anything — verify it responds conversationally, not with short fragments
+
+---
+
+### What to check if something isn't working
+
+| Symptom | Likely cause |
+|---|---|
+| Mix doesn't speak at session start | Gemini Live model not available in your region — check `GOOGLE_CLOUD_LOCATION` |
+| Image never generates | `ARCHITECT_URL` not set correctly, or Imagen API not enabled |
+| Microphone not captured | Browser permissions denied — check site settings |
+| Hand tracking not showing | Camera permissions denied, or MediaPipe CDN failed to load |
+| Mix reads instructions aloud | Model version mismatch — verify `MODEL_ID` in `.env` |
+
+---
+
 ## Tech stack
 
-- **Frontend** — Vanilla JS + Fabric.js (interactive canvas), WebSocket audio streaming
-- **Voice AI** — Gemini Live via [Google ADK](https://google.github.io/adk-docs/) bidi-streaming
+- **Frontend** — React + Fabric.js (interactive canvas), MediaPipe Hands, WebSocket audio streaming
+- **Voice AI** — Gemini Live 2.5 Flash (Native Audio) via [Google ADK](https://google.github.io/adk-docs/) bidi-streaming
 - **Image generation** — Imagen 3 via Vertex AI
 - **Backend** — FastAPI + uvicorn on Cloud Run
 - **Agent-to-agent** — Google ADK A2A protocol between main and architect services
