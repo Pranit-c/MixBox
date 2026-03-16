@@ -1434,34 +1434,38 @@ function App() {
   const handleColor = useCallback((c) => {
     setSelectedColor(c.name);
     selectedColorHexRef.current = c.hex;
+
+    // Mid-gesture color swap: just update the active color and keep drawing.
+    // Reset prevBrushPalm so there's no connecting stroke on the color transition.
+    if (flowStep === 'gesturing') {
+      prevBrushPalmRef.current = [null, null];
+      return;
+    }
+
+    // Initial color pick: clear canvas, restart gesture mode after a short delay
     setFlowStep('color_picked');
     setStampCount(0);
     stampPosesRef.current = [];
 
-    // Clear stamp canvas for fresh start
     if (stampCanvasRef.current) {
       const ctx = stampCanvasRef.current.getContext('2d');
       ctx.fillStyle = '#f9f5ef';
       ctx.fillRect(0, 0, stampCanvasRef.current.width, stampCanvasRef.current.height);
     }
 
-    // Stop any running gesture mode
     stopGestureMode();
 
-    // Notify backend (color pick triggers Mix response + gesture invitation)
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'canvas_action', action_type: 'color', value: c.name, hex: c.hex,
       }));
     }
 
-    // Start gesture mode after a short delay (let Mix acknowledge the color first)
-    // Canvas is always visible now, no resize needed — just start tracking
     setTimeout(() => {
       setFlowStep('gesturing');
       startGestureMode();
     }, 1800);
-  }, []);
+  }, [flowStep]);
 
   // ── Done handler — export stamp canvas → clear it → trigger generation ──────
   const handleDone = useCallback(() => {
@@ -1662,7 +1666,7 @@ function App() {
         selected=${selectedColor}
         onSelect=${handleColor}
         disabled=${!sessionActive || flowStep === 'generating'}
-        locked=${flowStep === 'gesturing'}
+        locked=${false}
       />
 
       <main className="cv">
