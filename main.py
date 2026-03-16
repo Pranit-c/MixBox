@@ -114,7 +114,13 @@ runner = Runner(
 run_config = RunConfig(
     streaming_mode=StreamingMode.BIDI,
     response_modalities=["AUDIO"],
-    # No explicit voice_name — let native audio model choose its default
+    speech_config=types.SpeechConfig(
+        voice_config=types.VoiceConfig(
+            prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                voice_name="Aoede"   # warm, natural female voice
+            )
+        )
+    ),
     input_audio_transcription=types.AudioTranscriptionConfig(),
     output_audio_transcription=types.AudioTranscriptionConfig(),
     session_resumption=types.SessionResumptionConfig(),
@@ -355,6 +361,11 @@ async def websocket_endpoint(ws: WebSocket):
                 live_request_queue=live_request_queue,
                 run_config=run_config,
             ):
+                # ── Interruption — user spoke over Mix; flush browser queue ───
+                if getattr(event, "interrupted", False):
+                    await ws.send_text(json.dumps({"type": "interrupted"}))
+                    continue
+
                 # ── Audio / image inline data ──────────────────────────────────
                 if event.content and event.content.parts:
                     for part in event.content.parts:

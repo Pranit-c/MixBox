@@ -1623,6 +1623,14 @@ function App() {
         if (msg.transcript) setTranscript(msg.transcript);
 
         // Voice selected a color
+        // Mix was interrupted — stop playing immediately
+        if (msg.type === 'interrupted') {
+          _playbackQueue = [];
+          _isPlaying = false;
+          if (_orbStateSetter) _orbStateSetter('listening');
+          return;
+        }
+
         if (msg.type === 'voice_select' && msg.kind === 'color') {
           const color = COLORS.find(c => c.name === msg.value);
           if (color) handleColor(color);
