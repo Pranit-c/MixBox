@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 620" width="900" height="620" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+
+  <!-- Background -->
+  <rect width="900" height="620" fill="#faf7f2" rx="12"/>
+
+  <!-- Title -->
+  <text x="450" y="42" text-anchor="middle" font-size="22" font-weight="700" fill="#2a2520">MixBox — System Architecture</text>
+  <text x="450" y="64" text-anchor="middle" font-size="13" fill="#7a6f65">Gemini Live Agent Challenge · Creative Storyteller Track</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- BROWSER BOX -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <rect x="30" y="90" width="240" height="400" rx="10" fill="#fff" stroke="#c8b89a" stroke-width="1.5"/>
+  <rect x="30" y="90" width="240" height="36" rx="10" fill="#e8dfd0"/>
+  <rect x="30" y="114" width="240" height="12" fill="#e8dfd0"/>
+  <text x="150" y="114" text-anchor="middle" font-size="12" font-weight="700" fill="#5a4a3a" letter-spacing="1">BROWSER</text>
+
+  <!-- React label -->
+  <text x="150" y="152" text-anchor="middle" font-size="11" fill="#7a6f65">React + htm (no build step)</text>
+
+  <!-- Fabric.js box -->
+  <rect x="50" y="162" width="200" height="52" rx="7" fill="#f5f0e8" stroke="#c8b89a" stroke-width="1"/>
+  <text x="150" y="181" text-anchor="middle" font-size="11" font-weight="600" fill="#4a3a2a">Fabric.js Canvas</text>
+  <text x="150" y="197" text-anchor="middle" font-size="10" fill="#7a6f65">Jigsaw collage · drag · PNG export</text>
+  <text x="150" y="210" text-anchor="middle" font-size="10" fill="#7a6f65">3×3 animated snap-in puzzle</text>
+
+  <!-- MediaPipe box -->
+  <rect x="50" y="224" width="200" height="52" rx="7" fill="#f5f0e8" stroke="#c8b89a" stroke-width="1"/>
+  <text x="150" y="243" text-anchor="middle" font-size="11" font-weight="600" fill="#4a3a2a">MediaPipe Hands</text>
+  <text x="150" y="259" text-anchor="middle" font-size="10" fill="#7a6f65">5 hand poses · 1.5s hold-to-stamp</text>
+  <text x="150" y="272" text-anchor="middle" font-size="10" fill="#7a6f65">fist · point · peace · pinch · open</text>
+
+  <!-- Web Audio box -->
+  <rect x="50" y="286" width="200" height="40" rx="7" fill="#f5f0e8" stroke="#c8b89a" stroke-width="1"/>
+  <text x="150" y="305" text-anchor="middle" font-size="11" font-weight="600" fill="#4a3a2a">Web Audio API</text>
+  <text x="150" y="319" text-anchor="middle" font-size="10" fill="#7a6f65">PCM capture · 16kHz · 16-bit</text>
+
+  <!-- Color picker box -->
+  <rect x="50" y="336" width="200" height="40" rx="7" fill="#f5f0e8" stroke="#c8b89a" stroke-width="1"/>
+  <text x="150" y="355" text-anchor="middle" font-size="11" font-weight="600" fill="#4a3a2a">Color Palette + Done Button</text>
+  <text x="150" y="369" text-anchor="middle" font-size="10" fill="#7a6f65">12 colors · voice commands</text>
+
+  <!-- Websocket label at bottom of browser -->
+  <text x="150" y="420" text-anchor="middle" font-size="10" fill="#9a8a7a" font-style="italic">WebSocket  ·  wss://</text>
+  <text x="150" y="434" text-anchor="middle" font-size="10" fill="#9a8a7a" font-style="italic">binary PCM + JPEG frames + JSON</text>
+  <text x="150" y="448" text-anchor="middle" font-size="10" fill="#9a8a7a" font-style="italic">canvas actions + audio output</text>
+  <text x="150" y="468" text-anchor="middle" font-size="10" fill="#9a8a7a" font-style="italic">interruption signals + transcripts</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- WEBSOCKET ARROW: Browser → Main -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <line x1="272" y1="290" x2="330" y2="290" stroke="#b09a7a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="330,285 342,290 330,295" fill="#b09a7a"/>
+  <!-- return arrow -->
+  <line x1="330" y1="310" x2="272" y2="310" stroke="#b09a7a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="272,305 260,310 272,315" fill="#b09a7a"/>
+  <text x="301" y="284" text-anchor="middle" font-size="9" fill="#9a7a5a">PCM audio</text>
+  <text x="301" y="322" text-anchor="middle" font-size="9" fill="#9a7a5a">audio + images</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- MIXBOX-MAIN BOX (Cloud Run) -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <rect x="345" y="90" width="230" height="400" rx="10" fill="#fff" stroke="#7ab5c8" stroke-width="1.5"/>
+  <rect x="345" y="90" width="230" height="36" rx="10" fill="#d0e8f0"/>
+  <rect x="345" y="114" width="230" height="12" fill="#d0e8f0"/>
+  <text x="460" y="114" text-anchor="middle" font-size="12" font-weight="700" fill="#2a4a5a" letter-spacing="1">MIXBOX-MAIN · Cloud Run</text>
+
+  <text x="460" y="152" text-anchor="middle" font-size="11" fill="#4a6a7a">FastAPI + uvicorn</text>
+
+  <!-- ADK box -->
+  <rect x="362" y="160" width="196" height="60" rx="7" fill="#e8f4fa" stroke="#7ab5c8" stroke-width="1"/>
+  <text x="460" y="178" text-anchor="middle" font-size="11" font-weight="600" fill="#2a4a5a">Google ADK</text>
+  <text x="460" y="193" text-anchor="middle" font-size="10" fill="#4a6a7a">LiveRequestQueue · bidi streaming</text>
+  <text x="460" y="207" text-anchor="middle" font-size="10" fill="#4a6a7a">send_realtime · send_content</text>
+
+  <!-- Mix agent box -->
+  <rect x="362" y="232" width="196" height="72" rx="7" fill="#e8f4fa" stroke="#7ab5c8" stroke-width="1"/>
+  <text x="460" y="250" text-anchor="middle" font-size="11" font-weight="600" fill="#2a4a5a">Mix Agent (LlmAgent)</text>
+  <text x="460" y="265" text-anchor="middle" font-size="10" fill="#4a6a7a">Gemini Live 2.5 Flash Native Audio</text>
+  <text x="460" y="279" text-anchor="middle" font-size="10" fill="#4a6a7a">Trauma-informed persona</text>
+  <text x="460" y="293" text-anchor="middle" font-size="10" fill="#4a6a7a">Two-mode: witness ↔ conversation</text>
+
+  <!-- Flow state box -->
+  <rect x="362" y="314" width="196" height="52" rx="7" fill="#e8f4fa" stroke="#7ab5c8" stroke-width="1"/>
+  <text x="460" y="333" text-anchor="middle" font-size="11" font-weight="600" fill="#2a4a5a">Flow State</text>
+  <text x="460" y="348" text-anchor="middle" font-size="10" fill="#4a6a7a">color · gestures · transcript</text>
+  <text x="460" y="362" text-anchor="middle" font-size="10" fill="#4a6a7a">voice done detection</text>
+
+  <!-- Voice keywords box -->
+  <rect x="362" y="376" width="196" height="40" rx="7" fill="#e8f4fa" stroke="#7ab5c8" stroke-width="1"/>
+  <text x="460" y="395" text-anchor="middle" font-size="11" font-weight="600" fill="#2a4a5a">Voice Keyword Detection</text>
+  <text x="460" y="409" text-anchor="middle" font-size="10" fill="#4a6a7a">color names · "i'm done" phrases</text>
+
+  <!-- A2A label -->
+  <text x="460" y="450" text-anchor="middle" font-size="10" fill="#9a7a5a" font-style="italic">HTTP A2A →  image_architect</text>
+  <text x="460" y="464" text-anchor="middle" font-size="10" fill="#9a7a5a" font-style="italic">color + gestures + voice mood</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- A2A ARROW: Main → Architect -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <line x1="577" y1="290" x2="630" y2="290" stroke="#a07a5a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="630,285 642,290 630,295" fill="#a07a5a"/>
+  <line x1="630" y1="310" x2="577" y2="310" stroke="#a07a5a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="577,305 565,310 577,315" fill="#a07a5a"/>
+  <text x="609" y="283" text-anchor="middle" font-size="9" fill="#7a5a3a">A2A</text>
+  <text x="609" y="295" text-anchor="middle" font-size="9" fill="#7a5a3a">prompt</text>
+  <text x="609" y="322" text-anchor="middle" font-size="9" fill="#7a5a3a">base64</text>
+  <text x="609" y="334" text-anchor="middle" font-size="9" fill="#7a5a3a">image</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- MIXBOX-ARCHITECT BOX (Cloud Run) -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <rect x="648" y="90" width="222" height="280" rx="10" fill="#fff" stroke="#c8a07a" stroke-width="1.5"/>
+  <rect x="648" y="90" width="222" height="36" rx="10" fill="#f0e0c8"/>
+  <rect x="648" y="114" width="222" height="12" fill="#f0e0c8"/>
+  <text x="759" y="114" text-anchor="middle" font-size="12" font-weight="700" fill="#5a3a1a" letter-spacing="1">IMAGE ARCHITECT · Cloud Run</text>
+
+  <text x="759" y="152" text-anchor="middle" font-size="11" fill="#7a5a3a">A2A FastAPI server · ADK LlmAgent</text>
+
+  <!-- Prompt pipeline box -->
+  <rect x="665" y="162" width="188" height="90" rx="7" fill="#faf0e0" stroke="#c8a07a" stroke-width="1"/>
+  <text x="759" y="180" text-anchor="middle" font-size="11" font-weight="600" fill="#5a3a1a">Prompt Enrichment Pipeline</text>
+  <text x="759" y="196" text-anchor="middle" font-size="10" fill="#7a5a3a">color → visual base texture</text>
+  <text x="759" y="210" text-anchor="middle" font-size="10" fill="#7a5a3a">gesture → compositional quality</text>
+  <text x="759" y="224" text-anchor="middle" font-size="10" fill="#7a5a3a">voice mood → emotional tone</text>
+  <text x="759" y="238" text-anchor="middle" font-size="10" fill="#7a5a3a">→ collage style · no faces · no text</text>
+
+  <!-- Imagen box -->
+  <rect x="665" y="262" width="188" height="52" rx="7" fill="#faf0e0" stroke="#c8a07a" stroke-width="1"/>
+  <text x="759" y="281" text-anchor="middle" font-size="11" font-weight="600" fill="#5a3a1a">Imagen 3</text>
+  <text x="759" y="296" text-anchor="middle" font-size="10" fill="#7a5a3a">imagen-3.0-generate-002</text>
+  <text x="759" y="310" text-anchor="middle" font-size="10" fill="#7a5a3a">Vertex AI · us-central1</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- GEMINI LIVE ARROW: Mix Agent → Gemini API -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <rect x="345" y="510" width="525" height="90" rx="10" fill="#fff" stroke="#7a8ac8" stroke-width="1.5"/>
+  <rect x="345" y="510" width="525" height="32" rx="10" fill="#d8ddf5"/>
+  <rect x="345" y="530" width="525" height="12" fill="#d8ddf5"/>
+  <text x="607" y="530" text-anchor="middle" font-size="12" font-weight="700" fill="#2a2a5a" letter-spacing="1">VERTEX AI · GOOGLE CLOUD</text>
+
+  <text x="462" y="560" text-anchor="middle" font-size="11" font-weight="600" fill="#2a2a5a">Gemini Live 2.5 Flash</text>
+  <text x="462" y="575" text-anchor="middle" font-size="10" fill="#4a4a7a">Native Audio · bidi streaming</text>
+  <text x="462" y="589" text-anchor="middle" font-size="10" fill="#4a4a7a">voice + vision + language</text>
+
+  <text x="752" y="560" text-anchor="middle" font-size="11" font-weight="600" fill="#2a2a5a">Gemini 2.5 Flash + Imagen 3</text>
+  <text x="752" y="575" text-anchor="middle" font-size="10" fill="#4a4a7a">Prompt orchestration</text>
+  <text x="752" y="589" text-anchor="middle" font-size="10" fill="#4a4a7a">imagen-3.0-generate-002</text>
+
+  <!-- Divider in Vertex box -->
+  <line x1="607" y1="545" x2="607" y2="600" stroke="#b0b4e0" stroke-width="1"/>
+
+  <!-- Arrow: Mix Agent → Vertex AI Gemini Live -->
+  <line x1="460" y1="490" x2="460" y2="508" stroke="#7a8ac8" stroke-width="2"/>
+  <polygon points="455,508 460,520 465,508" fill="#7a8ac8"/>
+  <text x="460" y="506" text-anchor="middle" font-size="9" fill="#5a5a9a">Gemini Live SDK</text>
+
+  <!-- Arrow: Imagen → Vertex AI -->
+  <line x1="759" y1="370" x2="759" y2="508" stroke="#7a8ac8" stroke-width="2"/>
+  <polygon points="754,508 759,520 764,508" fill="#7a8ac8"/>
+  <text x="790" y="448" font-size="9" fill="#5a5a9a">Vertex AI</text>
+  <text x="790" y="460" font-size="9" fill="#5a5a9a">SDK</text>
+
+  <!-- ═══════════════════════════════════════════════ -->
+  <!-- Legend -->
+  <!-- ═══════════════════════════════════════════════ -->
+  <rect x="30" y="510" width="290" height="90" rx="8" fill="#fff" stroke="#c8b89a" stroke-width="1"/>
+  <text x="175" y="530" text-anchor="middle" font-size="11" font-weight="700" fill="#2a2520">Legend</text>
+
+  <line x1="48" y1="548" x2="78" y2="548" stroke="#b09a7a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="78,543 90,548 78,553" fill="#b09a7a"/>
+  <text x="98" y="552" font-size="10" fill="#5a4a3a">WebSocket  (real-time bidi)</text>
+
+  <line x1="48" y1="568" x2="78" y2="568" stroke="#a07a5a" stroke-width="2" stroke-dasharray="5,3"/>
+  <polygon points="78,563 90,568 78,573" fill="#a07a5a"/>
+  <text x="98" y="572" font-size="10" fill="#5a4a3a">HTTP A2A  (agent-to-agent)</text>
+
+  <line x1="48" y1="588" x2="78" y2="588" stroke="#7a8ac8" stroke-width="2"/>
+  <polygon points="78,583 90,588 78,593" fill="#7a8ac8"/>
+  <text x="98" y="592" font-size="10" fill="#5a4a3a">Vertex AI SDK  (Gemini / Imagen)</text>
+
+</svg>
