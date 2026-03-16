@@ -1605,7 +1605,13 @@ function App() {
         for (let i = 0; i < outLen; i++) res[i] = input[Math.round(i * ratio)];
         ws.send(float32ToInt16(res).buffer);
       };
-      source.connect(proc); proc.connect(_audioCtx.destination);
+      // Connect proc to a silent gain node (not destination) so onaudioprocess
+      // fires without feeding the mic back into the speakers and confusing VAD.
+      const silentGain = _audioCtx.createGain();
+      silentGain.gain.value = 0;
+      source.connect(proc);
+      proc.connect(silentGain);
+      silentGain.connect(_audioCtx.destination);
       processorRef.current = proc;
 
       // Canvas stream — Mix sees the collage every 2s
