@@ -1390,15 +1390,6 @@ function App() {
     stampPosesRef.current.push(pose);
     setStampCount(prev => prev + 1);
 
-    // Tell Mix a gesture was just made so it can react
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'canvas_action',
-        action_type: 'stamp',
-        pose,
-      }));
-    }
-
     // Cooldown: 1s before next stamp from this hand
     setTimeout(() => {
       stampCooldownRef.current[handIdx] = false;

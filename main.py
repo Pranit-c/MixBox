@@ -209,38 +209,12 @@ async def websocket_endpoint(ws: WebSocket):
                                 hint = (
                                     f"[CANVAS ACTION: User chose color '{color_name}'. "
                                     f"Acknowledge with a warm 4–6 word observation about the color. "
-                                    f"Then invite them to show their hand and try holding a shape — "
-                                    f"a fist, a point, a peace sign, or a pinch — for a moment. "
-                                    f"Then let them know they can press done whenever they're ready "
-                                    f"and feel free to talk while they draw. "
-                                    f"Three sentences. Then go quiet and watch.]"
+                                    f"Then invite them to show their hand. "
+                                    f"Then — in one easy, unhurried sentence — let them know they can "
+                                    f"press the done button whenever they're ready, and that they're "
+                                    f"welcome to talk to you while they draw. "
+                                    f"Three sentences total. Then go quiet and watch.]"
                                 )
-
-                            # ── Gesture stamp — user held a pose, comment on it ───
-                            elif action_type == "stamp":
-                                pose = data.get("pose", "")
-                                if pose and not flow_state["generating"]:
-                                    pose_descriptions = {
-                                        "fist":  "a closed fist — held, grounded, contained",
-                                        "point": "a pointing finger — directed, certain, reaching",
-                                        "peace": "a peace sign — open, two-fingered, light",
-                                        "pinch": "a pinch — delicate, precise, holding something small",
-                                    }
-                                    desc = pose_descriptions.get(pose, pose)
-                                    hint = (
-                                        f"[GESTURE: User just held '{pose}' ({desc}) as a mark. "
-                                        f"React in one warm sentence — notice what that gesture "
-                                        f"might say, or simply name what you see. "
-                                        f"Keep it light and open, like a conversation starter. "
-                                        f"One sentence only. Then wait.]"
-                                    )
-                                    try:
-                                        live_request_queue.send_content(
-                                            types.Content(parts=[types.Part(text=hint)])
-                                        )
-                                    except Exception as e:
-                                        logger.warning(f"Stamp hint error: {e}")
-                                hint = None  # already sent above
 
                             # ── Done — user finished gesturing, trigger generation ──
                             elif action_type == "done":
