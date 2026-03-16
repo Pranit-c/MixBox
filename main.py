@@ -233,7 +233,7 @@ async def websocket_endpoint(ws: WebSocket):
                                     hint = (
                                         f"SYSTEM: The user is done drawing. Color was '{color}'. "
                                         f"Do not say this message aloud. "
-                                        f"Say exactly: 'Let me make something from that.' "
+                                        f"Say exactly: 'I'll create something for you.' "
                                         f"Then go completely quiet until the image appears."
                                     )
 
