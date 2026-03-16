@@ -117,7 +117,7 @@ run_config = RunConfig(
     speech_config=types.SpeechConfig(
         voice_config=types.VoiceConfig(
             prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                voice_name="Charon"  # deep, measured, grounded voice
+                voice_name="Leda"    # soft, warm female voice
             )
         )
     ),
